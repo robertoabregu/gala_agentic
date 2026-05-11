@@ -1,0 +1,11 @@
+openai
+python-dotenv
+faiss-cpu
+numpy
+langgraph
+langchain-openai
+langfuse
+requests
+flask
+twilio
+gunicorn

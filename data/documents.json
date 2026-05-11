@@ -1,0 +1,886 @@
+[
+  {
+    "id": "galicia-prestamos-como-consulto-mis-vencimientos-y-comprobantes-de-pago",
+    "title": "¿Cómo consulto mis vencimientos y comprobantes de pago?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/como-consulto-mis-vencimientos-y-comprobantes-de-pago",
+    "content": "¿Cómo consulto mis vencimientos y comprobantes de pago?\nDesde Préstamos, vas a encontrar tus préstamos activos con la fecha y el monto de la próxima cuota a vencer. Además, si seleccionás los 3 puntos en la esquina superior derecha, vas a abrir un menú en el que vas a poder descargar los comprobantes de tus pagos.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamos_general",
+    "document_purpose": "pagos",
+    "topics": [
+      "consulta de vencimientos",
+      "comprobantes de pago",
+      "préstamos activos"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento explica cómo consultar vencimientos y comprobantes de pago de préstamos en general sin especificar un tipo particular."
+  },
+  {
+    "id": "galicia-prestamos-como-es-la-liquidacion-del-prestamo-prendario",
+    "title": "¿Cómo es la liquidación del Préstamo Prendario?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/como-es-la-liquidacion-del-prestamo-prendario",
+    "content": "¿Cómo es la liquidación del Préstamo Prendario?\nPodés hacer el seguimiento en App Galicia u Online Banking , desde Préstamos > Pendientes.\n☝️ Recordá que el pago del saldo que no te financiamos y la entrega del vehículo tenés que coordinarlo con la concesionaria.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamo_prendario",
+    "document_purpose": "cuotas",
+    "topics": [
+      "liquidación",
+      "seguimiento",
+      "vehículo",
+      "concesionaria"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento se centra en la liquidación y seguimiento del préstamo prendario, mencionando específicamente el pago y la entrega del vehículo."
+  },
+  {
+    "id": "galicia-prestamos-como-hago-un-pago-parcial-de-mi-deuda",
+    "title": "¿Cómo hago un pago parcial de mi deuda?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/como-hago-un-pago-parcial-de-mi-deuda",
+    "content": "¿Cómo hago un pago parcial de mi deuda?\nPor App Galicia u Online Banking\nDesde la sección del producto que quieras pagar.\n☝🏻Recordá que cuando hacés un pago parcial sumás intereses.\nPodés pagar al menos el mínimo para estar al día. Si te es posible, pagá un monto mayor porque cuanto más pagues, menos intereses vas a sumar.\nTenés que ingresar el dinero en la cuenta que corresponda y lo debitaremos.\nDebés ingresar el dinero en la misma cuenta.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "pagos",
+    "document_purpose": "pagos",
+    "topics": [
+      "pago parcial",
+      "deuda",
+      "intereses"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento explica cómo realizar un pago parcial de una deuda, enfocándose en el proceso de pagos."
+  },
+  {
+    "id": "galicia-prestamos-como-me-afecta-tener-una-deuda-vencida",
+    "title": "¿Cómo me afecta tener una deuda vencida?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/como-me-afecta-tener-una-deuda-vencida",
+    "content": "¿Cómo me afecta tener una deuda vencida?\nTener una deuda vencida puede modificar tu clasificación en el Banco Central y Veraz. Esto puede afectar:\nEstar al día siempre es la mejor opción para cuidar tu historial financiero:\nSi tenés una deuda vencida:",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "otro",
+    "document_purpose": "problema",
+    "topics": [
+      "deuda vencida",
+      "historial financiero",
+      "clasificación crediticia"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento trata sobre el impacto de tener una deuda vencida en el historial financiero y clasificación crediticia, sin mencionar un producto bancario específico."
+  },
+  {
+    "id": "galicia-prestamos-como-me-entero-si-estoy-al-dia-con-mis-productos",
+    "title": "¿Cómo me entero si estoy al día con mis productos?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/como-me-entero-si-estoy-al-dia-con-mis-productos",
+    "content": "¿Cómo me entero si estoy al día con mis productos?\nPor App Galicia u Online Banking\nDesde la sección del producto que quieras consultar podés revisar si estás al día o tenés:\n☝🏻 Recordá que si tenés una deuda de más de 5 días en alguno de tus productos:",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "otro",
+    "document_purpose": "estado_seguimiento",
+    "topics": [
+      "consulta de estado",
+      "deudas",
+      "productos bancarios"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento trata sobre cómo consultar el estado de pago de productos en general, sin especificar un producto bancario particular."
+  },
+  {
+    "id": "galicia-prestamos-como-pago-la-cuota-de-mi-prestamo-prendario",
+    "title": "¿Cómo pago la cuota de mi Préstamo Prendario?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/como-pago-la-cuota-de-mi-prestamo-prendario",
+    "content": "¿Cómo pago la cuota de mi Préstamo Prendario?\nDebitaremos la cuota automáticamente de tu caja de ahorro.\n☝️ Recordá que en la sección Préstamos de App Galicia y Onling Banking podés:",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamo_prendario",
+    "document_purpose": "pagos",
+    "topics": [
+      "pago de cuotas",
+      "préstamo prendario",
+      "app bancaria"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento se centra en el pago de la cuota de un préstamo prendario, explicando el método de débito automático."
+  },
+  {
+    "id": "galicia-prestamos-como-pago-las-cuotas-del-prestamo",
+    "title": "¿Cómo pago las cuotas del préstamo?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/como-pago-las-cuotas-del-prestamo",
+    "content": "¿Cómo pago las cuotas del préstamo?\nLas cuotas se debitan de manera automática el día del vencimiento, de la misma cuenta donde acreditamos el dinero. Asegurate de tener saldo disponible ese día y tené en cuenta que, de no poder debitar el pago total, intentaremos hacer un cobro parcial de al menos el 5% de la cuota. Si no hay dinero para debitar y tampoco pagás manualmente, el sistema intentará debitar la cuota varias veces ese día y los días siguientes.\nTe recomendamos esperar el débito automático de la cuota. Pero si necesitás pagar una cuota manualmente en Online Banking podés hacerlo una vez al mes desde Préstamos > Hacé clic en los 3 puntos del préstamo > Pagar > Pago de cuota.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamos_general",
+    "document_purpose": "pagos",
+    "topics": [
+      "pago de cuotas",
+      "préstamos",
+      "débito automático"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento explica cómo pagar las cuotas de un préstamo en general, sin especificar un tipo particular de préstamo."
+  },
+  {
+    "id": "galicia-prestamos-como-pido-el-levantamiento-de-un-embargo-o-bloqueo-judicial",
+    "title": "¿Cómo pido el levantamiento de un embargo o bloqueo judicial?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/como-pido-el-levantamiento-de-un-embargo-o-bloqueo-judicial",
+    "content": "¿Cómo pido el levantamiento de un embargo o bloqueo judicial?\nTenés que pedirlo junto a tu abogado en el juzgado donde se ordenó.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "otro",
+    "document_purpose": "otro",
+    "topics": [
+      "embargo",
+      "bloqueo judicial",
+      "levantamiento"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento trata sobre el procedimiento para pedir el levantamiento de un embargo o bloqueo judicial, no relacionado con un producto bancario específico."
+  },
+  {
+    "id": "galicia-prestamos-como-pido-un-adelanto-de-sueldo-y-que-necesito",
+    "title": "¿Cómo pido un adelanto de sueldo y qué necesito?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/como-pido-un-adelanto-de-sueldo-y-que-necesito",
+    "content": "¿Cómo pido un adelanto de sueldo y qué necesito?\nSimulá y solicitá tu adelanto de sueldo en Online Banking o la app desde la sección Préstamos > Nuevo préstamo Personal > Adelanto de sueldo.\nPodés pedir hasta el 50% de tu sueldo , dependiendo de la oferta que tengas disponible y de los topes definidos al momento de solicitar el adelanto\n👆 Tené en cuenta que para solicitar un adelanto de sueldo necesitás:\nLo devolvés en una sola cuota entre los 5 y 45 días, y podés precancelar todo el préstamo sin pagar comisión.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "adelanto_sueldo",
+    "document_purpose": "solicitud",
+    "topics": [
+      "adelanto de sueldo",
+      "requisitos",
+      "solicitud"
+    ],
+    "classification_confidence": 0.95,
+    "classification_reason": "El documento explica cómo solicitar un adelanto de sueldo y los requisitos necesarios."
+  },
+  {
+    "id": "galicia-prestamos-como-se-compone-mi-deuda-vencida",
+    "title": "¿Cómo se compone mi deuda vencida?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/como-se-compone-mi-deuda-vencida",
+    "content": "¿Cómo se compone mi deuda vencida?\n☝🏻 Recordá que los intereses se calculan hasta que gestiones tu deuda.\nPodés consultar la tasa de interés desde la sección de cada producto en App Galicia y Online Banking.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "otro",
+    "document_purpose": "general_info",
+    "topics": [
+      "deuda vencida",
+      "intereses",
+      "consulta de tasa"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento explica la composición de la deuda vencida y cómo se calculan los intereses, sin especificar un producto financiero particular."
+  },
+  {
+    "id": "galicia-prestamos-como-y-cuando-pago-la-cuota-de-mi-prestamo-hipotecario-uva",
+    "title": "¿Cómo y cuándo pago la cuota de mi Préstamo Hipotecario UVA?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/como-y-cuando-pago-la-cuota-de-mi-prestamo-hipotecario-uva",
+    "content": "¿Cómo y cuándo pago la cuota de mi Préstamo Hipotecario UVA?\nLa cuota de tu préstamo se debitará automáticamente de tu cuenta el 8 de cada mes , o el día hábil posterior si fuera feriado, sábado o domingo.\nSolo si el destino de tu préstamo es para compra de primera vivienda, única y permanente, no aplicará el IVA en la cuota.\nEl detalle de las cuotas pagas podés consultarlo desde Online Banking > Préstamos.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamo_hipotecario_uva",
+    "document_purpose": "pagos",
+    "topics": [
+      "cuotas",
+      "pagos automáticos",
+      "condiciones de pago"
+    ],
+    "classification_confidence": 0.95,
+    "classification_reason": "El documento explica cómo y cuándo se paga la cuota del préstamo hipotecario UVA, enfocándose en el proceso de pago."
+  },
+  {
+    "id": "galicia-prestamos-cuales-son-las-caracteristicas-del-prestamo-hipotecario-uva",
+    "title": "¿Cuáles son las características del Préstamo Hipotecario UVA?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/cuales-son-las-caracteristicas-del-prestamo-hipotecario-uva",
+    "content": "¿Cuáles son las características del Préstamo Hipotecario UVA?\nEl préstamo es en pesos y puede ser destinado a la compra de tu primera casa. No es posible destinarlo a la construcción, compra de un terreno o de departamentos en pozo.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamo_hipotecario_uva",
+    "document_purpose": "general_info",
+    "topics": [
+      "características",
+      "destino del préstamo",
+      "restricciones"
+    ],
+    "classification_confidence": 1.0,
+    "classification_reason": "El documento describe las características y condiciones del Préstamo Hipotecario UVA."
+  },
+  {
+    "id": "galicia-prestamos-cuales-son-los-requisitos-para-pedir-un-prestamo-hipotecario-uva",
+    "title": "¿Cuáles son los requisitos para pedir un Préstamo Hipotecario UVA?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/cuales-son-los-requisitos-para-pedir-un-prestamo-hipotecario-uva",
+    "content": "¿Cuáles son los requisitos para pedir un Préstamo Hipotecario UVA?\n☝️ Recordá que el destino del préstamo debe ser la compra de una primer vivienda. No debe ser para la construcción, compra de un terreno o departamentos en pozo.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamo_hipotecario_uva",
+    "document_purpose": "requisitos",
+    "topics": [
+      "préstamo hipotecario UVA",
+      "requisitos",
+      "compra de vivienda"
+    ],
+    "classification_confidence": 1.0,
+    "classification_reason": "El documento se enfoca en los requisitos para solicitar un préstamo hipotecario UVA."
+  },
+  {
+    "id": "galicia-prestamos-cuando-me-confirman-el-monto-final-de-mi-prestamo-hipotecario-uva",
+    "title": "¿Cuándo me confirman el monto final de mi Préstamo Hipotecario UVA?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/cuando-me-confirman-el-monto-final-de-mi-prestamo-hipotecario-uva",
+    "content": "¿Cuándo me confirman el monto final de mi Préstamo Hipotecario UVA?\nEl monto final te lo confirmamos después de analizar la tasación de la propiedad.\nSiempre dependerá del monto máximo que podemos prestarte, el que definimos en el preacuerdo , y del valor de tasación que se presente en garantía. Conocé más sobre el preacuerdo\n☝️ Recordá que el préstamo no podrá superar el 70% del valor de tasación y/o escrituración de la propiedad que vas a comprar.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamo_hipotecario_uva",
+    "document_purpose": "condiciones",
+    "topics": [
+      "monto final",
+      "tasación",
+      "preacuerdo",
+      "valor de tasación",
+      "préstamo máximo"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento explica cuándo se confirma el monto final del préstamo hipotecario UVA y las condiciones relacionadas con la tasación y el preacuerdo."
+  },
+  {
+    "id": "galicia-prestamos-cuando-me-reintegran-los-fondos-debitados-por-un-embargo-judicial",
+    "title": "¿Cuándo me reintegran los fondos debitados por un embargo judicial?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/cuando-me-reintegran-los-fondos-debitados-por-un-embargo-judicial",
+    "content": "¿Cuándo me reintegran los fondos debitados por un embargo judicial?\nSi los fondos están en Galicia:\nVamos a reintegrártelos en tu cuenta dentro de los 10 días hábiles desde que el juzgado nos envía el oficio judicial de levantamiento del embargo.\nSi los fondos están en una cuenta judicial:\nTendrás que ir al juzgado junto a tu abogado para pedir que liberen los fondos de esa cuenta.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "cuentas",
+    "document_purpose": "pagos",
+    "topics": [
+      "embargo judicial",
+      "reintegro de fondos",
+      "cuentas bancarias"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento trata sobre el reintegro de fondos debitados por un embargo judicial en cuentas bancarias, relacionado con pagos y movimientos de fondos."
+  },
+  {
+    "id": "galicia-prestamos-los-adelantos-de-sueldo-son-pre-cancelables",
+    "title": "¿Los adelantos de sueldo son pre cancelables?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/los-adelantos-de-sueldo-son-pre-cancelables",
+    "content": "¿Los adelantos de sueldo son pre cancelables?\nSí, podés hacer un pago parcial o total de tu préstamo.\nEncontrá una sucursal y acercate.\nIngresá desde Online Banking a Préstamos > Pagar > Pagar total del préstamo.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "adelanto_sueldo",
+    "document_purpose": "cancelacion",
+    "topics": [
+      "adelanto de sueldo",
+      "pre cancelación",
+      "pagos"
+    ],
+    "classification_confidence": 0.95,
+    "classification_reason": "El documento trata sobre la posibilidad de pre cancelación de adelantos de sueldo, indicando cómo realizar pagos parciales o totales."
+  },
+  {
+    "id": "galicia-prestamos-los-prestamos-express-son-pre-cancelables",
+    "title": "¿Los Préstamos Express son pre cancelables?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/los-prestamos-express-son-pre-cancelables",
+    "content": "¿Los Préstamos Express son pre cancelables?\nSí, podés hacer un pago total de tu préstamo.\nIngresá desde Online Banking a Préstamos > Pagar > Pagar total del préstamo. Sin comisiones.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamo_express",
+    "document_purpose": "cancelacion",
+    "topics": [
+      "préstamos express",
+      "pre cancelación",
+      "pagos"
+    ],
+    "classification_confidence": 0.95,
+    "classification_reason": "El documento se centra en la posibilidad de pre cancelar préstamos express y cómo realizar el pago total."
+  },
+  {
+    "id": "galicia-prestamos-los-prestamos-personales-son-pre-cancelables",
+    "title": "¿Los préstamos personales son pre cancelables?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/los-prestamos-personales-son-pre-cancelables",
+    "content": "¿Los préstamos personales son pre cancelables?\nSí, podés hacer un pago parcial o total de tu préstamo una vez que hayas pagado la primera cuota.\nAdelantá pagos de tu préstamo en Online Banking o la App Galicia desde Préstamos > Seleccioná los 3 puntos de tu préstamo > Pagar > Cancelación parcial.\nVamos a cobrarte el 4% + IVA del capital cancelado, y los intereses de los días que hayan pasado desde que pagaste la última cuota hasta el día que hagas la cancelación parcial.\nTambién podés hacerlo en Online Banking o la app desde Préstamos > Seleccioná los 3 puntos de tu préstamo > Pagar > Cancelación total.\nSi pagás el total de tu préstamo antes de que pase el 25% del plazo original o si no pasaron 180 días (6 meses) desde que lo pediste, de esas condiciones la mayor, vamos a cobrarte el 4% + IVA sobre el capital cancelado.\nPor ejemplo: si pediste un préstamo a 12 meses y querés pagar el total al cuarto mes, vas a haber superado el 25%, pero como todavía no pasaron 180 días tendrás que pagar el 4% + IVA.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamo_personal",
+    "document_purpose": "cancelacion",
+    "topics": [
+      "pre cancelacion",
+      "pagos parciales",
+      "condiciones de cancelacion"
+    ],
+    "classification_confidence": 1.0,
+    "classification_reason": "El documento trata específicamente sobre la pre cancelación de préstamos personales y las condiciones asociadas."
+  },
+  {
+    "id": "galicia-prestamos-mi-deuda-vencida-incluye-varios-productos-en-que-orden-se-debitan",
+    "title": "Mi deuda vencida incluye varios productos, ¿en qué orden se debitan?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/mi-deuda-vencida-incluye-varios-productos-en-que-orden-se-debitan",
+    "content": "Mi deuda vencida incluye varios productos, ¿en qué orden se debitan?\nUna vez que ingresás el dinero en tu caja de ahorro para ponerte al día, los débitos se aplican en este orden:",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "otro",
+    "document_purpose": "pagos",
+    "topics": [
+      "deuda vencida",
+      "orden de débito",
+      "pagos"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento trata sobre el orden en que se debitan pagos de una deuda vencida que incluye varios productos, sin especificar un producto financiero principal."
+  },
+  {
+    "id": "galicia-prestamos-puedo-anular-un-prestamo-que-ya-solicite",
+    "title": "¿Puedo anular un préstamo que ya solicité?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/puedo-anular-un-prestamo-que-ya-solicite",
+    "content": "¿Puedo anular un préstamo que ya solicité?\nTenés hasta 10 días hábiles desde que te acreditamos el préstamo para anularlo. Es sin costo siempre y cuando no hayas usado el dinero.\nPodés hacerlo en Online Banking > Hacé clic en “Botón de baja” que está en la esquina superior derecha > Préstamos.\nSi usaste los fondos o pasaron los 10 días hábiles, deberás hacer una cancelación total en Online Banking o la app desde Préstamos > Seleccioná los 3 puntos de tu préstamo > Pagar > Cancelación total. Vas a pagar el capital junto con los intereses por los días transcurridos, y una comisión del 4% + IVA del capital adeudado.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamos_general",
+    "document_purpose": "cancelacion",
+    "topics": [
+      "anulación de préstamo",
+      "cancelación total",
+      "condiciones de cancelación"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento explica cómo anular o cancelar un préstamo ya solicitado, sin especificar un tipo particular de préstamo."
+  },
+  {
+    "id": "galicia-prestamos-puedo-cambiar-la-fecha-de-vencimiento-de-mi-prestamo",
+    "title": "¿Puedo cambiar la fecha de vencimiento de mi préstamo?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/puedo-cambiar-la-fecha-de-vencimiento-de-mi-prestamo",
+    "content": "¿Puedo cambiar la fecha de vencimiento de mi préstamo?\nSí, podés hacerlo siempre que estés al día con tus productos desde:\n☝🏻 Recordá que no es posible cambiar la fecha de tu Préstamo Hipotecario UVA.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamos_general",
+    "document_purpose": "condiciones",
+    "topics": [
+      "fecha de vencimiento",
+      "modificación de préstamo",
+      "préstamos"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento habla sobre la posibilidad de cambiar la fecha de vencimiento de un préstamo en general, sin especificar un tipo particular, y menciona una condición específica para préstamos hipotecarios UVA."
+  },
+  {
+    "id": "galicia-prestamos-puedo-cambiar-la-fecha-de-vencimiento-de-mi-tarjeta-o-prestamo",
+    "title": "¿Puedo cambiar la fecha de vencimiento de mi tarjeta o préstamo?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/puedo-cambiar-la-fecha-de-vencimiento-de-mi-tarjeta-o-prestamo",
+    "content": "¿Puedo cambiar la fecha de vencimiento de mi tarjeta o préstamo?\nSí, podés hacerlo sin costos ni intereses. Cambiar la fecha de vencimiento puede ayudarte si no coincide con la fecha en la que cobrás.\nPara cambiar la fecha de tu Tarjeta\nPara cambiar la fecha de tu Préstamo\n☝🏻 Recordá que no es posible cambiar la fecha de tu Préstamo Hipotecario UVA.\nEl cambio no es inmediato:",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "otro",
+    "document_purpose": "cuotas",
+    "topics": [
+      "fecha de vencimiento",
+      "tarjeta",
+      "préstamo",
+      "cambio de fecha"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento trata sobre cambiar la fecha de vencimiento de tarjetas y préstamos en general, sin especificar un tipo de préstamo particular."
+  },
+  {
+    "id": "galicia-prestamos-puedo-cancelar-antes-mi-prestamo-prendario",
+    "title": "¿Puedo cancelar antes mi Préstamo Prendario?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/puedo-cancelar-antes-mi-prestamo-prendario",
+    "content": "¿Puedo cancelar antes mi Préstamo Prendario?\nSí, podés hacer una cancelación total o parcial una vez que hayas pagado la primera cuota .\nVamos a cobrarte un 5 % + IVA sobre el capital que canceles, más los intereses por los días que pasaron desde el último pago hasta la fecha de la cancelación.\nSi pagás el total del préstamo antes de que pase el 25 % del plazo original o antes de los 180 días desde que lo solicitaste, vamos a cobrarte el 5 % + IVA sobre el capital cancelado .",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamo_prendario",
+    "document_purpose": "cancelacion",
+    "topics": [
+      "cancelación anticipada",
+      "costos",
+      "condiciones de pago"
+    ],
+    "classification_confidence": 0.95,
+    "classification_reason": "El documento trata específicamente sobre la cancelación anticipada de un préstamo prendario y las condiciones asociadas."
+  },
+  {
+    "id": "galicia-prestamos-puedo-pagar-el-prestamo-por-adelantado",
+    "title": "¿Puedo pagar el préstamo por adelantado?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/puedo-pagar-el-prestamo-por-adelantado",
+    "content": "¿Puedo pagar el préstamo por adelantado?\nSí, podés hacer una precancelación parcial o total de tu préstamo una vez que hayas pagado la primera cuota.\nTené en cuenta que si hacés un pago parcial, o si hacés el pago total antes de que pasen el 25% del plazo y/o 180 días desde la acreditación, vamos a cobrarte una comisión del 4% + IVA.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamos_general",
+    "document_purpose": "cancelacion",
+    "topics": [
+      "pago anticipado",
+      "comisiones",
+      "condiciones de pago"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento habla sobre la posibilidad y condiciones para pagar un préstamo por adelantado sin especificar un tipo particular de préstamo."
+  },
+  {
+    "id": "galicia-prestamos-puedo-sumar-ingresos-con-alguien-mas",
+    "title": "¿Puedo sumar ingresos con alguien más?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/puedo-sumar-ingresos-con-alguien-mas",
+    "content": "¿Puedo sumar ingresos con alguien más?\nSí, podés sumar ingresos con un familiar directo. Se consideran familiares directos: padre o madre, cónyuge o conviviente, hermanos/as e hijos/as.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamos_general",
+    "document_purpose": "requisitos",
+    "topics": [
+      "ingresos",
+      "requisitos",
+      "familiares directos"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento trata sobre la posibilidad de sumar ingresos con familiares directos, lo cual es un requisito común para préstamos en general."
+  },
+  {
+    "id": "galicia-prestamos-puedo-usar-el-dinero-del-prestamo-para-comprar-dolares",
+    "title": "¿Puedo usar el dinero del préstamo para comprar Dólares?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/puedo-usar-el-dinero-del-prestamo-para-comprar-dolares",
+    "content": "¿Puedo usar el dinero del préstamo para comprar Dólares?\nSí, podés usarlo para comprar dólares. Te contamos los detalles.\nDesde el 14 de abril de 2025, el Banco Central definió nuevas condiciones para acceder al Mercado Libre de Cambios (MLC). Esto significa que, si sos persona física y residís en Argentina, vas a poder comprar dólares con el dinero del préstamo hipotecario. Las medidas están detalladas en la Comunicación “A” 8226 .\nEl préstamo te lo acreditamos en tu cuenta en pesos, el día en que firmás la escritura. La cantidad de UVAs que representa, la calculamos según la cotización de la UVA del día.\n☝️Tené en cuenta que para hacer la compra de dólares vas a necesitar:",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamo_hipotecario_uva",
+    "document_purpose": "condiciones",
+    "topics": [
+      "uso del préstamo",
+      "compra de dólares",
+      "condiciones del Banco Central",
+      "Mercado Libre de Cambios"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento se centra en las condiciones para usar el préstamo hipotecario UVA para comprar dólares, explicando regulaciones y detalles específicos."
+  },
+  {
+    "id": "galicia-prestamos-que-caracteristicas-tiene-el-prestamo-prendario",
+    "title": "¿Qué características tiene el Préstamo Prendario?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/que-caracteristicas-tiene-el-prestamo-prendario",
+    "content": "¿Qué características tiene el Préstamo Prendario?\nEstas son las características principales:\nHay 2 tipos de préstamo . Podés elegir el que más te convenga en la concesionaria:\n☝️ Recordá que si querés vender el vehículo , primero tenés que cancelar el préstamo y pedirnos la liberación de la garantía.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamo_prendario",
+    "document_purpose": "general_info",
+    "topics": [
+      "características",
+      "tipos de préstamo",
+      "cancelación",
+      "liberación de garantía"
+    ],
+    "classification_confidence": 0.95,
+    "classification_reason": "El documento describe las características principales del préstamo prendario y menciona aspectos relacionados con la cancelación y liberación de garantía."
+  },
+  {
+    "id": "galicia-prestamos-que-diferencia-hay-entre-los-prestamos-personales-uva-y-los-comunes",
+    "title": "¿Qué diferencia hay entre los Préstamos Personales UVA y los comunes?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/que-diferencia-hay-entre-los-prestamos-personales-uva-y-los-comunes",
+    "content": "¿Qué diferencia hay entre los Préstamos Personales UVA y los comunes?\nEste préstamo se diferencia porque cuenta con una tasa más baja y el dinero que solicitás se calcula en UVA. También lo solicitás en Online Banking o la App Galicia y es precancelable.\nCada UVA equivale a un monto en pesos, que se ajusta mes a mes según el Coeficiente de Estabilización de Referencia (CER) del Banco Central.\nEso significa que vas a pagar menos interés, pero las cuotas van a ir variando en relación a cómo evoluciona el valor de la UVA.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamo_hipotecario_uva",
+    "document_purpose": "comparacion",
+    "topics": [
+      "tasas",
+      "UVA",
+      "cuotas variables",
+      "solicitud online"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento compara características entre préstamos personales UVA y comunes, destacando diferencias en tasa y cálculo en UVA."
+  },
+  {
+    "id": "galicia-prestamos-que-documentacion-necesito-para-pedir-un-prestamo-hipotecario-uva",
+    "title": "¿Qué documentación necesito para pedir un Préstamo Hipotecario UVA?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/que-documentacion-necesito-para-pedir-un-prestamo-hipotecario-uva",
+    "content": "¿Qué documentación necesito para pedir un Préstamo Hipotecario UVA?\nValidación de la relación conyugal\nEn caso de cónyuge o conviviente :\nDocumentación de la propiedad\nEsta documentación la vas a necesitar una vez que te confirmemos la oferta que tenemos para vos.\n☝️Recordá que si se trata de la primera escritura, el reglamento de copropiedad debe estar previamente inscripto en el Registro de la Propiedad Inmueble.\nSi es una vivienda en un barrio cerrado/privado:",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamo_hipotecario_uva",
+    "document_purpose": "documentacion",
+    "topics": [
+      "documentación",
+      "préstamo hipotecario UVA",
+      "requisitos"
+    ],
+    "classification_confidence": 0.95,
+    "classification_reason": "El documento se centra en la documentación necesaria para solicitar un préstamo hipotecario UVA."
+  },
+  {
+    "id": "galicia-prestamos-que-es-el-preacuerdo",
+    "title": "¿Qué es el preacuerdo?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/que-es-el-preacuerdo",
+    "content": "Es un documento válido por 60 días que d efine el máximo de dinero que podemos prestarte y que está sujeto a la posterior tasación de la propiedad.\nPor ejemplo: si en el preacuerdo definimos que el máximo que podemos prestarte es $20.000.000 y la propiedad que querés comprar se tasa en $100.000.000, el máximo a financiarte seguirá siendo $20.000.000.\n﻿☝️ Recordá que es válido siempre que:",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamo_hipotecario_uva",
+    "document_purpose": "general_info",
+    "topics": [
+      "preacuerdo",
+      "tasación",
+      "financiamiento",
+      "propiedad"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento explica qué es un preacuerdo relacionado con el monto máximo de préstamo para la compra de una propiedad, lo que corresponde a un préstamo hipotecario UVA."
+  },
+  {
+    "id": "galicia-prestamos-que-es-la-cuotificacion-y-como-puedo-solicitarla",
+    "title": "¿Qué es la cuotificación y cómo puedo solicitarla?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/que-es-la-cuotificacion-y-como-puedo-solicitarla",
+    "content": "¿Qué es la cuotificación y cómo puedo solicitarla?\nEs la opción de pagar en cuotas lo que gastaste con débito.\nPodés hacerlo por Online Banking o la App Galicia. Simulá y solicitá tu cuotificación desde la sección Préstamos > Nuevo Préstamo > Cuotificación.\nAl solicitar una cuotificación, recuperás la plata que gastaste en los últimos 30 días con tu tarjeta de débito. Te acreditamos el monto al instante y lo devolvés en 3 o 6 cuotas con interés . Además, podés precancelar todo sin pagar comisión.\n👆 Tené en cuenta que para cuotificar tus consumos necesitás:",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "cuotificacion",
+    "document_purpose": "solicitud",
+    "topics": [
+      "cuotificación",
+      "solicitud",
+      "pagos en cuotas",
+      "tarjeta de débito"
+    ],
+    "classification_confidence": 0.95,
+    "classification_reason": "El documento explica qué es la cuotificación y cómo solicitarla, enfocándose en el proceso de solicitud y condiciones para pagar en cuotas."
+  },
+  {
+    "id": "galicia-prestamos-que-es-un-bloqueo-judicial",
+    "title": "¿Qué es un bloqueo judicial?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/que-es-un-bloqueo-judicial",
+    "content": "¿Qué es un bloqueo judicial?\nEs una medida cautelar, distinta a un embargo, que ordena un juez a través de un oficio para asegurar que se cumpla un proceso judicial.\nSi el juzgado nos ordena bloquear tu cuenta, no vas a poder hacer débitos, transferencias ni extracciones.\n☝️ Recordá que los bancos solo somos responsables de cumplir la medida. Por eso, para conocer los motivos o pedir el levantamiento tenés que ir junto a tu abogado al juzgado donde se ordenó.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "cuentas",
+    "document_purpose": "general_info",
+    "topics": [
+      "bloqueo judicial",
+      "medida cautelar",
+      "restricciones en cuenta"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento explica qué es un bloqueo judicial aplicado a cuentas bancarias y sus implicancias."
+  },
+  {
+    "id": "galicia-prestamos-que-es-un-embargo-judicial",
+    "title": "¿Qué es un embargo judicial?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/que-es-un-embargo-judicial",
+    "content": "¿Qué es un embargo judicial?\nEs una medida cautelar, ordenada por un juez para asegurar que se cumpla un proceso judicial, que puede aplicarse sobre tus cuentas o productos bancarios.\nSi nos ordenan cumplir con un embargo, vamos a hacer débitos en tu cuenta bajo el nombre “Orden judicial” , hasta completar el monto total que el juzgado nos haya indicado.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "cuentas",
+    "document_purpose": "general_info",
+    "topics": [
+      "embargo judicial",
+      "medida cautelar",
+      "débitos en cuenta"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento explica qué es un embargo judicial y cómo afecta las cuentas bancarias, sin centrarse en un producto específico más allá de las cuentas."
+  },
+  {
+    "id": "galicia-prestamos-que-es-un-prestamo-express-y-como-lo-solicito",
+    "title": "¿Qué es un Préstamo Express y cómo lo solicito?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/que-es-un-prestamo-express-y-como-lo-solicito",
+    "content": "¿Qué es un Préstamo Express y cómo lo solicito?\nEs un préstamo que te permite pedir un monto menor y devolverlo en una sola cuota , que pagás en entre los 5 y 45 días. Podés simularlo y solicitarlo desde Online Banking en la sección Préstamos > Nuevo préstamo > Préstamos Express.\nPara solicitarlo tenés que cumplir con estas características:\n👆Podés precancelar todo sin pagar comisión .",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamo_express",
+    "document_purpose": "solicitud",
+    "topics": [
+      "definición",
+      "requisitos",
+      "solicitud",
+      "condiciones de pago"
+    ],
+    "classification_confidence": 0.95,
+    "classification_reason": "El documento explica qué es un préstamo express y cómo solicitarlo, incluyendo condiciones para la solicitud y pago."
+  },
+  {
+    "id": "galicia-prestamos-que-es-un-prestamo-flexible",
+    "title": "¿Qué es un Préstamo Flexible?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/que-es-un-prestamo-flexible",
+    "content": "¿Qué es un Préstamo Flexible?\nEs una nueva herramienta exclusiva para clientes NyP (Negocios y Profesionales) y NyP Gold, que les permite pagar la primera cuota a los 3 meses , pagando los intereses proporcionales al tiempo transcurrido hasta el primer pago. Además, lo pueden devolver hasta en 72 cuotas.\nPara solicitarlo necesitás:\nLos Préstamos Flexibles son precancelables, tanto parcial como total al igual que los personales.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamo_personal",
+    "document_purpose": "general_info",
+    "topics": [
+      "préstamo flexible",
+      "condiciones de pago",
+      "clientes NyP"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento describe un tipo específico de préstamo personal llamado Préstamo Flexible, sus características y condiciones generales."
+  },
+  {
+    "id": "galicia-prestamos-que-es-un-prestamo-hipotecario-uva-y-como-lo-pido",
+    "title": "¿Qué es un Préstamo Hipotecario UVA y cómo lo pido?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/que-es-un-prestamo-hipotecario-uva-y-como-lo-pido",
+    "content": "¿Qué es un Préstamo Hipotecario UVA y cómo lo pido?\nEs un tipo de financiación en pesos para comprar tu primera casa con tasas más accesibles y cuotas calculadas en UVAs.\nLa UVA, o Unidad de Valor Adquisitivo, es una herramienta de financiación creada en 2016 para ofrecer una alternativa a los préstamos tradicionales. Cada UVA equivale a un monto en pesos, que se ajusta mes a mes según el Coeficiente de Estabilización de Referencia (CER) del Banco Central.\nPara calcular la cantidad de UVAs se divide el monto del préstamo por la cotización de la UVA. El resultado es la cantidad total de UVAs. No hay un tope para la variación que pueda tener la UVA durante la vigencia del préstamo.\nPodés encontrar la cotización de la UVA en www.bcra.gov.ar .\nSiempre que cumplas con los requisitos , podés simularlo y pedirlo por:\nEn el momento en que lo pidas ya tendrás nuestra oferta y después de que la aceptes, haremos tu evaluación crediticia y te enviaremos por mail el preacuerdo. Conocé qué es el preacuerdo",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamo_hipotecario_uva",
+    "document_purpose": "solicitud",
+    "topics": [
+      "financiación",
+      "UVA",
+      "préstamo hipotecario",
+      "evaluación crediticia"
+    ],
+    "classification_confidence": 0.95,
+    "classification_reason": "El documento explica qué es un préstamo hipotecario UVA y cómo solicitarlo, enfocándose en la definición y el proceso de solicitud."
+  },
+  {
+    "id": "galicia-prestamos-que-es-un-prestamo-prendario-y-como-lo-pido",
+    "title": "¿Qué es un Préstamo Prendario y cómo lo pido?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/que-es-un-prestamo-prendario-y-como-lo-pido",
+    "content": "¿Qué es un Préstamo Prendario y cómo lo pido?\nEs un préstamo para financiar la compra de un vehículo . Mientras lo pagás, el vehículo queda como garantía.\nPodés pedirlo en la red de concesionarias adheridas , solo con tu DNI .\nUna vez que la concesionaria genere la solicitud:",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamo_prendario",
+    "document_purpose": "solicitud",
+    "topics": [
+      "definición",
+      "requisitos",
+      "proceso de solicitud"
+    ],
+    "classification_confidence": 0.95,
+    "classification_reason": "El documento explica qué es un préstamo prendario y cómo solicitarlo, enfocándose en el proceso de pedido."
+  },
+  {
+    "id": "galicia-prestamos-que-es-una-refinanciacion-y-cuando-puedo-pedirla",
+    "title": "¿Qué es una refinanciación y cuándo puedo pedirla?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/que-es-una-refinanciacion-y-cuando-puedo-pedirla",
+    "content": "¿Qué es una refinanciación y cuándo puedo pedirla?\nLa refinanciación es un préstamo que agrupa tus deudas : las vencidas y por vencer de todos tus productos.\nSolo podés pedirla si aplica al plan de pagos que tenemos para vos .\n¿Qué pasa cuando accedo a una refinanciación?:\n¿Cómo sé si puedo pedirla?\nSi aplica al plan de pagos que tenemos para vos, podés pedirla por App Galicia u Online Banking .\nCuando tengas una deuda de más de 5 días en alguno de tus productos, vas a encontrar un aviso que te llevará a la sección Gestión de deuda, donde tendrás disponible la opción “ Refinanciación ”.\nTambién podés pedirla por WhatsApp : escribinos al +54 9 11 2631-1444 .",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamos_general",
+    "document_purpose": "general_info",
+    "topics": [
+      "refinanciación",
+      "deudas",
+      "plan de pagos"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento explica qué es la refinanciación, un préstamo que agrupa deudas de varios productos, sin especificar un tipo particular de préstamo."
+  },
+  {
+    "id": "galicia-prestamos-que-es-y-como-hago-una-promesa-de-pago",
+    "title": "¿Qué es y cómo hago una promesa de pago?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/que-es-y-como-hago-una-promesa-de-pago",
+    "content": "¿Qué es y cómo hago una promesa de pago?\nUna promesa de pago es un compromiso que asumís para pagarnos la deuda vencida en una nueva fecha que vos elegís.\nTe ayuda a mantener una mejor posición frente al Banco Central y Veraz , ya que la promesa muestra voluntad de pago. Por eso, no vamos a contactarte mientras la promesa esté vigente\nPodés hacerla por App Galicia u Online Banking .\nCuando tengas una deuda de más de 5 días e n alguno de tus productos, vas a encontrar un aviso que te llevará a la sección Gestión de deuda , donde tendrás disponible la opción “Promesa de pago”.\n️ ☝🏻 Recordá que si llegás a la nueva fecha pactada y no cumplís con la promesa de pago, la deuda vencida sigue sumando intereses y podrías tener restricciones adicionales en tus productos.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "otro",
+    "document_purpose": "pagos",
+    "topics": [
+      "promesa de pago",
+      "deuda",
+      "compromiso de pago"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento explica qué es una promesa de pago y cómo realizarla para gestionar deudas, sin enfocarse en un producto financiero específico."
+  },
+  {
+    "id": "galicia-prestamos-que-incluye-la-cuota-del-adelanto-de-sueldo",
+    "title": "¿Qué incluye la cuota del adelanto de sueldo?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/que-incluye-la-cuota-del-adelanto-de-sueldo",
+    "content": "¿Qué incluye la cuota del adelanto de sueldo?\nEste préstamo se devuelve en una única cuota que incluye:",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "adelanto_sueldo",
+    "document_purpose": "cuotas",
+    "topics": [
+      "cuota",
+      "adelanto de sueldo",
+      "préstamo"
+    ],
+    "classification_confidence": 0.95,
+    "classification_reason": "El documento explica qué incluye la cuota del adelanto de sueldo, enfocándose en el detalle del pago."
+  },
+  {
+    "id": "galicia-prestamos-que-incluye-la-cuota-del-prestamo-personal",
+    "title": "¿Qué incluye la cuota del préstamo personal?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/que-incluye-la-cuota-del-prestamo-personal",
+    "content": "¿Qué incluye la cuota del préstamo personal?\nLa cuota que vas a pagar todos los meses incluye:",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamo_personal",
+    "document_purpose": "cuotas",
+    "topics": [
+      "cuota",
+      "préstamo personal",
+      "detalle de pagos"
+    ],
+    "classification_confidence": 0.95,
+    "classification_reason": "El documento se enfoca en explicar qué incluye la cuota mensual de un préstamo personal."
+  },
+  {
+    "id": "galicia-prestamos-que-pasa-si-no-puedo-cumplir-con-los-pagos-mensuales",
+    "title": "¿Qué pasa si no puedo cumplir con los pagos mensuales?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/que-pasa-si-no-puedo-cumplir-con-los-pagos-mensuales",
+    "content": "¿Qué pasa si no puedo cumplir con los pagos mensuales?\nLas cuotas de tu préstamo se debitan automáticamente de tu cuenta . Por eso, el día del vencimiento asegurate de tener saldo disponible.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamos_general",
+    "document_purpose": "pagos",
+    "topics": [
+      "pagos",
+      "cuotas",
+      "saldo disponible"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento habla sobre el incumplimiento en el pago de cuotas de préstamos en general sin especificar tipo de préstamo."
+  },
+  {
+    "id": "galicia-prestamos-que-significan-las-tasas-que-aplican-a-mi-prestamo",
+    "title": "¿Qué significan las tasas que aplican a mi préstamo?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/que-significan-las-tasas-que-aplican-a-mi-prestamo",
+    "content": "¿Qué significan las tasas que aplican a mi préstamo?\nTasa Nominal Anual (TNA): indica el porcentaje de interés que tenés que pagar por tu préstamo.\nTasa Efectiva Anual (TEA): es un cálculo anual que establece el interés que tenés que pagar por el préstamo solicitado.\nCosto Financiero Total Efectivo Anual (CFTEA): es el porcentaje que refleja el costo anual del dinero prestado (intereses), más todos los gastos, impuestos y sellados que vas a pagar por tu préstamo.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamos_general",
+    "document_purpose": "general_info",
+    "topics": [
+      "tasas de interés",
+      "TNA",
+      "TEA",
+      "CFTEA",
+      "costos de préstamo"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento explica conceptos generales sobre tasas aplicadas a préstamos sin especificar un tipo particular."
+  },
+  {
+    "id": "galicia-prestamos-que-sistema-de-amortizacion-se-usa",
+    "title": "¿Qué sistema de amortización se usa?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/que-sistema-de-amortizacion-se-usa",
+    "content": "¿Qué sistema de amortización se usa?\nLos sistemas de amortización definen cómo van a ser las cuotas e intereses del préstamo que solicitaste.\nEn el Adelanto de Sueldo, usamos el sistema Americano : pagás todo el capital e interés en una única cuota al final del plazo que elijas.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "adelanto_sueldo",
+    "document_purpose": "general_info",
+    "topics": [
+      "sistema de amortización",
+      "cuotas",
+      "intereses",
+      "adelanto de sueldo"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento explica el sistema de amortización específico para el producto Adelanto de Sueldo."
+  },
+  {
+    "id": "galicia-prestamos-que-son-los-sistemas-de-amortizacion",
+    "title": "¿Qué son los sistemas de amortización?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/que-son-los-sistemas-de-amortizacion",
+    "content": "¿Qué son los sistemas de amortización?\nLos sistemas de amortización definen cómo van a ser las cuotas e intereses del préstamo que solicitaste.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamos_general",
+    "document_purpose": "general_info",
+    "topics": [
+      "sistemas de amortización",
+      "cuotas",
+      "intereses",
+      "préstamos"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento explica qué son los sistemas de amortización en el contexto de préstamos en general sin especificar un tipo particular."
+  },
+  {
+    "id": "galicia-prestamos-que-son-los-sistemas-de-amortizacion-en-cuotificacion",
+    "title": "¿Qué son los sistemas de amortización en cuotificación?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/que-son-los-sistemas-de-amortizacion-en-cuotificacion",
+    "content": "¿Qué son los sistemas de amortización en cuotificación?\nLos sistemas de amortización definen cómo van a ser las cuotas e intereses del préstamo que solicitaste.\nEn la Cuotificación de consumos, usamos el sistema Francés : el valor de las cuotas va a ser parecido, porque el pago de capital crece y el de interés decrece.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "cuotificacion",
+    "document_purpose": "general_info",
+    "topics": [
+      "sistemas de amortización",
+      "cuotas",
+      "intereses",
+      "cuotificación"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento explica qué son los sistemas de amortización específicamente en el contexto de cuotificación."
+  },
+  {
+    "id": "galicia-prestamos-que-son-los-sistemas-de-amortizacion-en-los-prestamos-express",
+    "title": "¿Qué son los sistemas de amortización en los Préstamos Express?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/que-son-los-sistemas-de-amortizacion-en-los-prestamos-express",
+    "content": "¿Qué son los sistemas de amortización en los Préstamos Express?\nLos sistemas de amortización definen cómo van a ser las cuotas e intereses del préstamo que solicitaste.\nEn el Préstamo Express, usamos el sistema Americano : pagás todo el capital e interés en una única cuota al final del plazo que elijas.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamo_express",
+    "document_purpose": "general_info",
+    "topics": [
+      "sistemas de amortización",
+      "cuotas",
+      "intereses",
+      "Préstamo Express"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento explica el sistema de amortización específico del Préstamo Express, proporcionando información general sobre cómo funcionan las cuotas e intereses."
+  },
+  {
+    "id": "galicia-prestamos-que-tengo-que-considerar-sobre-la-propiedad-que-quiero-comprar",
+    "title": "¿Qué tengo que considerar sobre la propiedad que quiero comprar?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/que-tengo-que-considerar-sobre-la-propiedad-que-quiero-comprar",
+    "content": "¿Qué tengo que considerar sobre la propiedad que quiero comprar?",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamo_hipotecario_uva",
+    "document_purpose": "general_info",
+    "topics": [
+      "propiedad",
+      "consideraciones",
+      "compra"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento trata sobre consideraciones para comprar una propiedad, relacionado con préstamos hipotecarios UVA."
+  },
+  {
+    "id": "galicia-prestamos-tengo-gastos-adicionales-si-compro-un-vehiculo-con-un-prestamo-prendario",
+    "title": "¿Tengo gastos adicionales si compro un vehículo con un préstamo prendario?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/tengo-gastos-adicionales-si-compro-un-vehiculo-con-un-prestamo-prendario",
+    "content": "¿Tengo gastos adicionales si compro un vehículo con un préstamo prendario?\nNo vas a tener gastos adicionales por el préstamo , pero sí algunos gastos por la gestión de la compra , como la inscripción o la transferencia del vehículo.\nEsos gastos los regula y factura la Dirección Nacional del Registro de la Propiedad Automotor (DNRPA), y dependen de si el vehículo es 0 km o usado . Consultá los aranceles en el sitio de la DNRPA\n☝️Recordá que no tendrás que pagar honorarios de gestor: ese gasto lo cubre Galicia.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamo_prendario",
+    "document_purpose": "condiciones",
+    "topics": [
+      "gastos adicionales",
+      "préstamo prendario",
+      "compra de vehículo"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento se centra en explicar los gastos relacionados con la compra de un vehículo mediante un préstamo prendario, aclarando qué gastos son cubiertos y cuáles no."
+  },
+  {
+    "id": "galicia-prestamos-tengo-que-contratar-un-seguro-para-acceder-al-prestamo-prendario",
+    "title": "¿Tengo que contratar un seguro para acceder al Préstamo Prendario?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/tengo-que-contratar-un-seguro-para-acceder-al-prestamo-prendario",
+    "content": "¿Tengo que contratar un seguro para acceder al Préstamo Prendario?\nSí, cuando firmes la oferta de préstamo en App Galicia u Online Banking, te pediremos que contrates desde ahí un seguro automotor.\n☝️ Recordá que el pago del seguro es distinto al de la cuota .",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamo_prendario",
+    "document_purpose": "requisitos",
+    "topics": [
+      "seguro automotor",
+      "contratación de seguro",
+      "préstamo prendario"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento explica la necesidad de contratar un seguro para acceder al préstamo prendario, indicando un requisito para el producto."
+  },
+  {
+    "id": "galicia-prestamos-termine-de-pagar-el-prestamo-como-obtengo-la-prenda-del-auto",
+    "title": "Terminé de pagar el préstamo, ¿cómo obtengo la prenda del auto?",
+    "url": "https://ayuda.bancogalicia.com.ar/n4/termine-de-pagar-el-prestamo-como-obtengo-la-prenda-del-auto",
+    "content": "Terminé de pagar el préstamo, ¿cómo obtengo la prenda del auto?\nSi cancelaste el préstamo, tenés que gestionar la liberación de la prenda . Podes hacerlo desde:\nTocá Más > Préstamos > Seleccioná los 3 puntitos > Solicitar liberación de prenda.\nIngresá a la sección de Préstamos > Seleccioná 3 puntitos > Solicitar liberación de prenda.\nLuego deberás elegir la sucursal Galicia por dónde retirar el contrato de prenda . Con ese papel vas a poder iniciar el trámite en el Registro de la Propiedad Automotor para liberar al vehículo como garantía del préstamo. Tené en cuenta que los aranceles de este trámite corren por tu cuenta.",
+    "source": "Banco Galicia - Ayuda pública",
+    "section": "Préstamos",
+    "product_type": "prestamo_prendario",
+    "document_purpose": "cancelacion",
+    "topics": [
+      "liberación de prenda",
+      "cancelación de préstamo",
+      "préstamo prendario"
+    ],
+    "classification_confidence": 0.9,
+    "classification_reason": "El documento trata sobre cómo obtener la liberación de la prenda tras cancelar un préstamo prendario."
+  }
+]

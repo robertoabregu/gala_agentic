@@ -1,0 +1,103 @@
+from langgraph.graph import StateGraph, END
+from langchain_openai import ChatOpenAI
+
+from agents.state import AgentState
+from agents.contextualizer import contextualizer_node
+from agents.router import router_node
+from agents.chitchat import chitchat_node
+from agents.query_rewriter import query_rewriter_node
+from agents.retriever_node import retriever_node
+from agents.answer import answer_node
+from agents.bcra_tool import bcra_tool_node
+from agents.bcra_answer import bcra_answer_node
+from agents.guardrail import guardrail_node
+from agents.save_memory import save_memory_node
+
+
+def build_graph(client, retriever, top_k, score_threshold, chat_model):
+    graph = StateGraph(AgentState)
+
+    llm = ChatOpenAI(
+        model=chat_model,
+        temperature=0,
+    )
+
+    def router_wrapper(state: AgentState):
+        return router_node(
+            state=state,
+            llm=llm,
+        )
+
+    def contextualizer_wrapper(state: AgentState):
+        return contextualizer_node(
+            state=state,
+            llm=llm,
+        )
+
+    def query_rewriter_wrapper(state: AgentState):
+        return query_rewriter_node(
+            state=state,
+            llm=llm,
+        )
+
+    def retriever_wrapper(state: AgentState):
+        return retriever_node(
+            state=state,
+            client=client,
+            retriever=retriever,
+            top_k=top_k,
+            score_threshold=score_threshold,
+        )
+
+    def answer_wrapper(state: AgentState):
+        return answer_node(
+            state=state,
+            llm=llm,
+        )
+
+    def chitchat_wrapper(state: AgentState):
+        return chitchat_node(state=state)
+
+    def bcra_tool_wrapper(state: AgentState):
+        return bcra_tool_node(state=state)
+
+    def bcra_answer_wrapper(state: AgentState):
+        return bcra_answer_node(state=state)
+
+    graph.add_node("contextualizer", contextualizer_wrapper)
+    graph.add_node("router", router_wrapper)
+    graph.add_node("chitchat_answer", chitchat_wrapper)
+    graph.add_node("query_rewriter", query_rewriter_wrapper)
+    graph.add_node("retriever", retriever_wrapper)
+    graph.add_node("answer", answer_wrapper)
+    graph.add_node("bcra_tool", bcra_tool_wrapper)
+    graph.add_node("bcra_answer", bcra_answer_wrapper)
+    graph.add_node("guardrail", guardrail_node)
+    graph.add_node("save_memory", save_memory_node)
+
+    graph.set_entry_point("contextualizer")
+    graph.add_edge("contextualizer", "router")
+
+    graph.add_conditional_edges(
+        "router",
+        lambda state: state["route"],
+        {
+            "chitchat": "chitchat_answer",
+            "rag": "query_rewriter",
+            "loans_rag": "query_rewriter",
+            "bcra_credit_status": "bcra_tool",
+            "fallback": "guardrail",
+            "sensitive": "guardrail",
+        },
+    )
+
+    graph.add_edge("chitchat_answer", "guardrail")
+    graph.add_edge("query_rewriter", "retriever")
+    graph.add_edge("retriever", "answer")
+    graph.add_edge("answer", "guardrail")
+    graph.add_edge("bcra_tool", "bcra_answer")
+    graph.add_edge("bcra_answer", "guardrail")
+    graph.add_edge("guardrail", "save_memory")
+    graph.add_edge("save_memory", END)
+
+    return graph.compile()
