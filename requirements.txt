@@ -3,6 +3,7 @@ python-dotenv
 faiss-cpu
 numpy
 langgraph
+langchain
 langchain-openai
 langfuse
 requests
