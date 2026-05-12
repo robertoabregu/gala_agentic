@@ -10,6 +10,7 @@ from agents.retriever_node import retriever_node
 from agents.answer import answer_node
 from agents.bcra_tool import bcra_tool_node
 from agents.bcra_answer import bcra_answer_node
+from agents.branch_locator_tool import branch_locator_node
 from agents.guardrail import guardrail_node
 from agents.save_memory import save_memory_node
 
@@ -64,6 +65,9 @@ def build_graph(client, retriever, top_k, score_threshold, chat_model):
     def bcra_answer_wrapper(state: AgentState):
         return bcra_answer_node(state=state)
 
+    def branch_locator_wrapper(state: AgentState):
+        return branch_locator_node(state=state)
+
     graph.add_node("contextualizer", contextualizer_wrapper)
     graph.add_node("router", router_wrapper)
     graph.add_node("chitchat_answer", chitchat_wrapper)
@@ -72,6 +76,7 @@ def build_graph(client, retriever, top_k, score_threshold, chat_model):
     graph.add_node("answer", answer_wrapper)
     graph.add_node("bcra_tool", bcra_tool_wrapper)
     graph.add_node("bcra_answer", bcra_answer_wrapper)
+    graph.add_node("branch_locator", branch_locator_wrapper)
     graph.add_node("guardrail", guardrail_node)
     graph.add_node("save_memory", save_memory_node)
 
@@ -86,6 +91,7 @@ def build_graph(client, retriever, top_k, score_threshold, chat_model):
             "rag": "query_rewriter",
             "loans_rag": "query_rewriter",
             "bcra_credit_status": "bcra_tool",
+            "branch_locator": "branch_locator",
             "fallback": "guardrail",
             "sensitive": "guardrail",
         },
@@ -97,6 +103,7 @@ def build_graph(client, retriever, top_k, score_threshold, chat_model):
     graph.add_edge("answer", "guardrail")
     graph.add_edge("bcra_tool", "bcra_answer")
     graph.add_edge("bcra_answer", "guardrail")
+    graph.add_edge("branch_locator", "guardrail")
     graph.add_edge("guardrail", "save_memory")
     graph.add_edge("save_memory", END)
 

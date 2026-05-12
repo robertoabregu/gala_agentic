@@ -56,13 +56,33 @@ def handle_whatsapp_message() -> Response:
     sender = (request.form.get("From") or "").strip()
     session_id = sanitize_whatsapp_session_id(sender)
 
+    latitude = (request.form.get("Latitude") or "").strip()
+    longitude = (request.form.get("Longitude") or "").strip()
+    address = (request.form.get("Address") or "").strip()
+    label = (request.form.get("Label") or "").strip()
+
+    user_location = {}
+    if latitude and longitude:
+        user_location = {
+            "latitude": latitude,
+            "longitude": longitude,
+            "address": address,
+            "label": label,
+        }
+
     try:
+        if not body and user_location:
+            body = "Ubicacion compartida por WhatsApp"
+
         if not body:
             return twiml_message("No recibí tu mensaje. Probá de nuevo, por favor.")
 
         print("\n[WHATSAPP] Mensaje recibido")
         print(f"  - from: {session_id}")
         print(f"  - body: {mask_sensitive_text(body)}")
+
+        if user_location:
+            print("  - location: recibida")
 
         result = run_bot_query(
             runtime=get_runtime(),
@@ -71,6 +91,7 @@ def handle_whatsapp_message() -> Response:
             langfuse_user_id=session_id,
             langfuse_tags=["gala", "langgraph", "rag", "whatsapp"],
             observation_name="gala-whatsapp-request",
+            user_location=user_location,
         )
 
         return twiml_message(result["final_answer"])

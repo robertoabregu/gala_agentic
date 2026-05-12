@@ -12,6 +12,7 @@ VALID_ROUTES = {
     "chitchat",
     "loans_rag",
     "bcra_credit_status",
+    "branch_locator",
     "fallback",
     "sensitive",
 }
@@ -47,6 +48,23 @@ SENSITIVE_STATEMENTS = (
     "mi cvv es",
     "te paso mi clave",
     "te paso mi contrasena",
+)
+
+BRANCH_LOCATOR_PATTERNS = (
+    "sucursal cercana",
+    "sucursales cercanas",
+    "sucursal mas cercana",
+    "sucursales mas cercanas",
+    "sucursal cerca",
+    "sucursales cerca",
+    "buscar sucursal",
+    "encontrar sucursal",
+    "donde hay una sucursal",
+    "donde tengo una sucursal",
+    "que sucursal tengo cerca",
+    "sucursal tengo cerca",
+    "galicia cerca",
+    "banco cerca",
 )
 
 BCRA_PATTERNS = (
@@ -131,6 +149,10 @@ def _is_sensitive_request(normalized_question: str) -> bool:
     return has_sensitive_term and (asks_to_reveal or shares_sensitive_data)
 
 
+def _is_branch_locator_request(normalized_question: str) -> bool:
+    return any(pattern in normalized_question for pattern in BRANCH_LOCATOR_PATTERNS)
+
+
 def _is_bcra_request(normalized_question: str) -> bool:
     return any(pattern in normalized_question for pattern in BCRA_PATTERNS)
 
@@ -140,7 +162,11 @@ def _is_loans_request(normalized_question: str) -> bool:
 
 
 def _is_chitchat_request(normalized_question: str) -> bool:
-    if _is_loans_request(normalized_question) or _is_bcra_request(normalized_question):
+    if (
+        _is_loans_request(normalized_question)
+        or _is_bcra_request(normalized_question)
+        or _is_branch_locator_request(normalized_question)
+    ):
         return False
 
     if normalized_question in CHITCHAT_EXACT:
@@ -161,8 +187,15 @@ def router_node(
 ) -> AgentState:
     question = state.get("question", "").strip()
     routing_question = (state.get("standalone_question") or question).strip()
+
     memory = state.get("memory") or {}
     pending_route = state.get("pending_route") or memory.get("pending_route", "")
+    last_route = state.get("last_route") or memory.get("last_route", "")
+    last_topic = state.get("last_topic") or memory.get("last_topic", "")
+
+    user_location = state.get("user_location") or {}
+    latitude = user_location.get("latitude")
+    longitude = user_location.get("longitude")
 
     if not question:
         log_step("ROUTER", "Fallback por pregunta vacia")
@@ -172,7 +205,28 @@ def router_node(
             "error": "Pregunta vacia.",
         }
 
-    if pending_route == "bcra_credit_status":
+    if latitude and longitude and (
+        pending_route == "branch_locator"
+        or last_route == "branch_locator"
+        or last_topic == "sucursales_cercanas"
+    ):
+        log_step(
+            "ROUTER",
+            "Ubicacion recibida para branch_locator",
+            {
+                "pending_route": pending_route,
+                "last_route": last_route,
+                "last_topic": last_topic,
+            },
+        )
+        return {
+            **state,
+            "route": "branch_locator",
+            "pending_route": "",
+            "error": None,
+        }
+
+    if pending_route in {"bcra_credit_status", "branch_locator"}:
         log_step(
             "ROUTER",
             "Ruta recuperada desde memoria local",
@@ -188,6 +242,8 @@ def router_node(
 
     if _is_sensitive_request(normalized_question):
         route = "sensitive"
+    elif _is_branch_locator_request(normalized_question):
+        route = "branch_locator"
     elif _is_bcra_request(normalized_question):
         route = "bcra_credit_status"
     elif _is_loans_request(normalized_question):
@@ -206,12 +262,14 @@ def router_node(
                             "Sos un clasificador de intencion para un chatbot bancario. "
                             "Tu unica tarea es decidir la ruta correcta. "
                             "Responde solamente una de estas palabras: "
-                            "chitchat, loans_rag, bcra_credit_status, fallback, sensitive.\n\n"
+                            "chitchat, loans_rag, bcra_credit_status, branch_locator, fallback, sensitive.\n\n"
                             "Usa chitchat para saludos, agradecimientos o charla simple.\n"
                             "Usa loans_rag para consultas sobre prestamos, adelanto de sueldo, "
                             "cuotas, precancelacion, prestamos hipotecarios o prendarios.\n"
                             "Usa bcra_credit_status cuando el usuario quiera consultar situacion "
                             "crediticia, Central de Deudores, BCRA o deudas bancarias.\n"
+                            "Usa branch_locator cuando el usuario quiera buscar sucursales "
+                            "Galicia cercanas a su ubicacion actual.\n"
                             "Usa sensitive si el usuario pide revelar, mostrar, recuperar o "
                             "compartir claves, contrasenas, PIN, tokens, CVV o datos privados.\n"
                             "Usa fallback si la consulta no encaja en ninguna ruta anterior."
