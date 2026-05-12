@@ -21,3 +21,4 @@ class AgentState(TypedDict):
     tool_output: NotRequired[Dict[str, Any]]
     needs_clarification: NotRequired[bool]
     missing_fields: NotRequired[List[str]]
+    user_location: NotRequired[Dict[str, Any]]

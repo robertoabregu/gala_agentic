@@ -190,7 +190,11 @@ def prepare_runtime(
     )
 
 
-def build_initial_state(question: str, session_id: str) -> dict[str, Any]:
+def build_initial_state(
+    question: str,
+    session_id: str,
+    user_location: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     memory = load_memory(session_id)
 
     return {
@@ -213,6 +217,7 @@ def build_initial_state(question: str, session_id: str) -> dict[str, Any]:
         "tool_output": {},
         "needs_clarification": False,
         "missing_fields": memory.get("missing_fields", []),
+        "user_location": user_location or {},
     }
 
 
@@ -259,11 +264,16 @@ def run_bot_query(
     langfuse_user_id: str | None = None,
     langfuse_tags: list[str] | None = None,
     observation_name: str = "gala-rag-request",
+    user_location: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if runtime.graph is None:
         raise RuntimeError("El runtime no fue preparado con un grafo ejecutable.")
 
-    initial_state = build_initial_state(question=question, session_id=session_id)
+    initial_state = build_initial_state(
+        question=question,
+        session_id=session_id,
+        user_location=user_location,
+    )
 
     config: dict[str, Any] = {
         "metadata": {
