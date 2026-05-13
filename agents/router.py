@@ -4,7 +4,7 @@ import unicodedata
 from langchain_openai import ChatOpenAI
 
 from agents.state import AgentState
-from core.privacy import mask_sensitive_text
+from core.privacy import extract_identification, mask_sensitive_text
 from observability.logger import log_step
 
 
@@ -86,6 +86,20 @@ BCRA_PATTERNS = (
     "historial crediticio",
 )
 
+BCRA_FOLLOWUP_PATTERNS = (
+    "malo",
+    "mala",
+    "bueno",
+    "buena",
+    "grave",
+    "normal",
+    "significa",
+    "riesgo",
+    "afecta",
+    "credito",
+    "deuda",
+)
+
 LOANS_PATTERNS = (
     "prestamo",
     "prestamos",
@@ -157,6 +171,55 @@ def _is_bcra_request(normalized_question: str) -> bool:
     return any(pattern in normalized_question for pattern in BCRA_PATTERNS)
 
 
+def _is_bcra_followup_request(
+    normalized_question: str,
+    *,
+    is_followup: bool,
+    last_route: str,
+    last_topic: str,
+) -> bool:
+    if not is_followup:
+        return False
+
+    if last_route != "bcra_credit_status" and last_topic != "situacion_crediticia_bcra":
+        return False
+
+    return any(pattern in normalized_question for pattern in BCRA_FOLLOWUP_PATTERNS)
+
+
+def _is_bcra_identification_followup(
+    question: str,
+    *,
+    pending_route: str,
+    missing_fields: list[str],
+    last_route: str,
+    last_topic: str,
+    last_assistant_answer: str,
+) -> bool:
+    if not extract_identification(question):
+        return False
+
+    if pending_route == "bcra_credit_status":
+        return True
+
+    if "identificacion" in missing_fields:
+        return True
+
+    if last_route == "bcra_credit_status":
+        return True
+
+    if last_topic == "situacion_crediticia_bcra":
+        return True
+
+    normalized_last_answer = _normalize_text(last_assistant_answer)
+
+    return (
+        "cuit" in normalized_last_answer
+        or "cuil" in normalized_last_answer
+        or "identificacion" in normalized_last_answer
+    )
+
+
 def _is_loans_request(normalized_question: str) -> bool:
     return any(pattern in normalized_question for pattern in LOANS_PATTERNS)
 
@@ -190,8 +253,10 @@ def router_node(
 
     memory = state.get("memory") or {}
     pending_route = state.get("pending_route") or memory.get("pending_route", "")
+    missing_fields = state.get("missing_fields") or memory.get("missing_fields", [])
     last_route = state.get("last_route") or memory.get("last_route", "")
     last_topic = state.get("last_topic") or memory.get("last_topic", "")
+    last_assistant_answer = memory.get("last_assistant_answer", "")
 
     user_location = state.get("user_location") or {}
     latitude = user_location.get("latitude")
@@ -226,6 +291,31 @@ def router_node(
             "error": None,
         }
 
+    if _is_bcra_identification_followup(
+        question,
+        pending_route=pending_route,
+        missing_fields=missing_fields,
+        last_route=last_route,
+        last_topic=last_topic,
+        last_assistant_answer=last_assistant_answer,
+    ):
+        log_step(
+            "ROUTER",
+            "Identificacion recibida para flujo BCRA",
+            {
+                "pending_route": pending_route,
+                "missing_fields": missing_fields,
+                "last_route": last_route,
+                "last_topic": last_topic,
+            },
+        )
+        return {
+            **state,
+            "route": "bcra_credit_status",
+            "pending_route": "",
+            "error": None,
+        }
+
     if pending_route in {"bcra_credit_status", "branch_locator"}:
         log_step(
             "ROUTER",
@@ -244,6 +334,13 @@ def router_node(
         route = "sensitive"
     elif _is_branch_locator_request(normalized_question):
         route = "branch_locator"
+    elif _is_bcra_followup_request(
+        normalized_question,
+        is_followup=bool(state.get("is_followup")),
+        last_route=last_route,
+        last_topic=last_topic,
+    ):
+        route = "bcra_credit_status"
     elif _is_bcra_request(normalized_question):
         route = "bcra_credit_status"
     elif _is_loans_request(normalized_question):
