@@ -5,6 +5,7 @@ from twilio.twiml.messaging_response import MessagingResponse
 
 from core.bot_runner import BotRuntime, prepare_runtime, run_bot_query
 from core.privacy import mask_sensitive_text
+from services.twilio_typing import send_whatsapp_typing_indicator
 
 
 app = Flask(__name__)
@@ -54,6 +55,7 @@ def health() -> Response:
 def handle_whatsapp_message() -> Response:
     body = (request.form.get("Body") or "").strip()
     sender = (request.form.get("From") or "").strip()
+    message_sid = (request.form.get("MessageSid") or "").strip()
     session_id = sanitize_whatsapp_session_id(sender)
 
     latitude = (request.form.get("Latitude") or "").strip()
@@ -83,6 +85,8 @@ def handle_whatsapp_message() -> Response:
 
         if user_location:
             print("  - location: recibida")
+
+        send_whatsapp_typing_indicator(message_sid)
 
         result = run_bot_query(
             runtime=get_runtime(),
