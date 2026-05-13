@@ -16,6 +16,7 @@ class AgentState(TypedDict):
     answer: str
     final_answer: str
     error: Optional[str]
+    topic: NotRequired[str]
     tool_name: NotRequired[str]
     tool_input: NotRequired[Dict[str, Any]]
     tool_output: NotRequired[Dict[str, Any]]

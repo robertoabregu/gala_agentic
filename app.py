@@ -6,6 +6,7 @@ from twilio.twiml.messaging_response import MessagingResponse
 from core.bot_runner import BotRuntime, prepare_runtime, run_bot_query
 from core.privacy import mask_sensitive_text
 from services.twilio_typing import send_whatsapp_typing_indicator
+from utils.whatsapp_formatting import format_whatsapp_answer
 
 
 app = Flask(__name__)
@@ -98,7 +99,13 @@ def handle_whatsapp_message() -> Response:
             user_location=user_location,
         )
 
-        return twiml_message(result["final_answer"])
+        formatted_answer = format_whatsapp_answer(
+            result["final_answer"],
+            topic=result.get("topic"),
+            route=result.get("route"),
+        )
+
+        return twiml_message(formatted_answer)
 
     except Exception as exc:
         print("\n[WHATSAPP] Error procesando mensaje")
