@@ -58,7 +58,7 @@ def _build_greeting_response(user_name: str = "") -> str:
     return (
         f"👋 Hola{name_part}, ¿cómo estás? Soy *Gala*.\n\n"
         "Podés *escribirme lo que necesitás* o elegir un tema y avanzamos.\n\n"
-        "Actualmente puedo ayudarte con:\n"
+        "Actualmente puedo ayudarte con:\n\n"
         "💰 Consultas sobre *préstamos*\n"
         "📊 Consulta de *situación crediticia*\n"
         "📍 Búsqueda de *sucursales cercanas*"
