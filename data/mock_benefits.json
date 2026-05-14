@@ -5,15 +5,13 @@
       "categoria": "Supermercados",
       "beneficios": [
         {
-          "id": 48,
-          "comercio": "¿Te toca ir al súper?",
-          "beneficio": "Aprovechá hasta 20% de ahorro",
-          "dias": null,
+          "id": 161594,
+          "comercio": "Makro",
+          "beneficio": "20% de ahorro",
+          "dias": "Jueves",
           "mediosDePago": [
-            "American Express Crédito",
-            "Mastercard Crédito",
-            "Galicia Débito",
-            "Visa Crédito"
+            "Crédito",
+            "Débito"
           ],
           "exclusivoEminent": false,
           "pagoQR": false,
