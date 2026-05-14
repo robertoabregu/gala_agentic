@@ -176,10 +176,85 @@ BENEFITS_CONTEXT_PATTERNS = (
     "eminent",
 )
 
+BANKING_FALLBACK_PATTERNS = (
+    "mi cuenta",
+    "cuenta bancaria",
+    "caja de ahorro",
+    "cuenta corriente",
+    "saldo",
+    "plata en mi cuenta",
+    "abrir una cuenta",
+    "abrir cuenta",
+    "tarjeta nueva",
+    "mi tarjeta",
+    "tarjeta de credito",
+    "tarjeta de debito",
+    "limite de mi tarjeta",
+    "aumentar el limite",
+    "comprar dolares",
+    "dolar",
+    "dolares",
+    "transferir plata",
+    "transferencia",
+    "transferencias",
+    "home banking",
+    "homebanking",
+    "cambiar mi clave",
+    "desbloqueo mi home banking",
+    "sacar efectivo",
+    "extraer efectivo",
+    "resumen de la tarjeta",
+    "pago el resumen",
+    "desconocer un consumo",
+    "desconocer consumo",
+    "consumo",
+    "inversion",
+    "inversiones",
+    "seguro",
+    "seguros",
+    "cbu",
+    "alias",
+)
+
+GENERAL_CHITCHAT_PATTERNS = (
+    "boca",
+    "river",
+    "partido",
+    "libertadores",
+    "mundial",
+    "futbol",
+    "clima",
+    "pronostico",
+    "llover",
+    "pelicula",
+    "peliculas",
+    "serie",
+    "series",
+    "chiste",
+    "receta",
+    "torta",
+    "cafe",
+    "como preparo",
+    "que significa",
+    "significa esta palabra",
+    "palabra",
+)
+
+CHITCHAT_CAPABILITIES_PATTERNS = (
+    "que podes hacer",
+    "que puedes hacer",
+    "en que me podes ayudar",
+    "en que me puedes ayudar",
+    "como me podes ayudar",
+    "como me puedes ayudar",
+    "ayuda",
+)
+
 CHITCHAT_EXACT = {
     "hola",
     "buen dia",
     "buenos dias",
+    "buenas",
     "buenas tardes",
     "buenas noches",
     "gracias",
@@ -305,12 +380,27 @@ def _has_benefits_context(normalized_question: str) -> bool:
     )
 
 
+def _is_banking_fallback_request(normalized_question: str) -> bool:
+    return any(
+        _contains_normalized_term(normalized_question, pattern)
+        for pattern in BANKING_FALLBACK_PATTERNS
+    )
+
+
+def _is_general_non_banking_request(normalized_question: str) -> bool:
+    return any(
+        _contains_normalized_term(normalized_question, pattern)
+        for pattern in GENERAL_CHITCHAT_PATTERNS
+    )
+
+
 def _is_chitchat_request(normalized_question: str) -> bool:
     if (
         _is_loans_request(normalized_question)
         or _is_bcra_request(normalized_question)
         or _is_branch_locator_request(normalized_question)
         or _is_benefits_request(normalized_question)
+        or _is_banking_fallback_request(normalized_question)
     ):
         return False
 
@@ -321,6 +411,12 @@ def _is_chitchat_request(normalized_question: str) -> bool:
         return True
 
     if normalized_question.startswith("hola") and len(normalized_question.split()) <= 4:
+        return True
+
+    if any(
+        _contains_normalized_term(normalized_question, pattern)
+        for pattern in CHITCHAT_CAPABILITIES_PATTERNS
+    ):
         return True
 
     return False
@@ -429,6 +525,10 @@ def router_node(
         route = "loans_rag"
     elif _is_benefits_request(normalized_question):
         route = "benefits"
+    elif _is_banking_fallback_request(normalized_question):
+        route = "fallback"
+    elif _is_general_non_banking_request(normalized_question):
+        route = "chitchat"
     elif _is_chitchat_request(normalized_question):
         route = "chitchat"
     else:
@@ -444,7 +544,11 @@ def router_node(
                             "Tu unica tarea es decidir la ruta correcta. "
                             "Responde solamente una de estas palabras: "
                             "chitchat, loans_rag, bcra_credit_status, branch_locator, benefits, fallback, sensitive.\n\n"
-                            "Usa chitchat para saludos, agradecimientos o charla simple.\n"
+                            "Definicion de chitchat: mensajes sociales, saludos, agradecimientos, "
+                            "despedidas, preguntas generales o temas no bancarios fuera del alcance del asistente.\n"
+                            "Definicion de fallback: consultas bancarias o financieras que parecen "
+                            "relevantes para Galicia pero que no estan cubiertas por los flujos disponibles.\n"
+                            "Usa chitchat para saludos, agradecimientos, charla simple o temas no bancarios.\n"
                             "Usa loans_rag para consultas sobre prestamos, adelanto de sueldo, "
                             "cuotas de prestamos, precancelacion, prestamos hipotecarios o prendarios.\n"
                             "Usa bcra_credit_status cuando el usuario quiera consultar situacion "
@@ -457,7 +561,22 @@ def router_node(
                             "segmento Eminent o Eminent Black.\n"
                             "Usa sensitive si el usuario pide revelar, mostrar, recuperar o "
                             "compartir claves, contrasenas, PIN, tokens, CVV o datos privados.\n"
-                            "Usa fallback si la consulta no encaja en ninguna ruta anterior."
+                            "Usa fallback solo para consultas bancarias o financieras no soportadas.\n\n"
+                            "Ejemplos:\n"
+                            "Usuario: me podes ayudar a hacer una torta?\n"
+                            "Intent: chitchat\n"
+                            "Usuario: cuando juega Boca por Libertadores?\n"
+                            "Intent: chitchat\n"
+                            "Usuario: quiero una tarjeta nueva\n"
+                            "Intent: fallback\n"
+                            "Usuario: cuanta plata tengo en mi cuenta?\n"
+                            "Intent: fallback\n"
+                            "Usuario: beneficios con QR\n"
+                            "Intent: benefits\n"
+                            "Usuario: promos de indumentaria\n"
+                            "Intent: benefits\n"
+                            "Usuario: quiero saber sobre prestamos personales\n"
+                            "Intent: loans_rag"
                         ),
                     ),
                     ("user", masked_question),
@@ -471,10 +590,10 @@ def router_node(
                 "Error clasificando con LLM",
                 {"error": str(exc)},
             )
-            route = "fallback"
+            route = "fallback" if _is_banking_fallback_request(normalized_question) else "chitchat"
 
     if route not in VALID_ROUTES:
-        route = "fallback"
+        route = "fallback" if _is_banking_fallback_request(normalized_question) else "chitchat"
 
     log_step("ROUTER", "Ruta seleccionada", {"route": route})
 
