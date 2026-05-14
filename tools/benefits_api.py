@@ -126,11 +126,16 @@ ONLY_EMINENT_PATTERNS = (
     "eminent",
     "eminent black",
     "por ser eminent",
+    "soy eminent",
+    "cliente eminent",
     "para eminent",
     "para eminent black",
     "beneficios eminent",
     "beneficios para eminent",
     "beneficios por ser eminent",
+    "exclusivo eminent",
+    "exclusivos eminent",
+    "eminent este mes",
     "solo eminent",
     "solo beneficios eminent",
     "solo exclusivos",
@@ -172,10 +177,27 @@ EXCLUSIVE_TERMS = (
     "exclusivas",
 )
 
-QR_PATTERNS = ("qr", "pago qr")
-NFC_PATTERNS = ("nfc", "pago nfc", "contactless")
+QR_PATTERNS = ("qr", "pago qr", "pagos con qr", "promos con qr")
+NFC_PATTERNS = (
+    "nfc",
+    "pago nfc",
+    "pagos con nfc",
+    "promos con nfc",
+    "contactless",
+    "contact less",
+    "sin contacto",
+    "pago sin contacto",
+)
 TODAY_PATTERNS = ("hoy", "para hoy")
 EVERY_DAY_PATTERNS = ("todos los dias", "todos los días")
+INTEREST_FREE_PATTERNS = ("sin interes", "sin interés")
+INSTALLMENTS_PATTERNS = (
+    "cuota",
+    "cuotas",
+    "pagar en cuotas",
+    "pagar cuotas",
+    "sacar cuotas",
+)
 
 BENEFITS_STOPWORDS = {
     "alguna",
@@ -209,6 +231,7 @@ BENEFITS_STOPWORDS = {
     "me",
     "mi",
     "mis",
+    "mes",
     "mostrar",
     "mostrame",
     "mostrames",
@@ -216,6 +239,8 @@ BENEFITS_STOPWORDS = {
     "oferta",
     "ofertas",
     "para",
+    "pagos",
+    "pagar",
     "por",
     "promo",
     "promocion",
@@ -227,8 +252,13 @@ BENEFITS_STOPWORDS = {
     "quiero",
     "quisiera",
     "rubro",
+    "sacar",
     "sin",
     "sobre",
+    "soy",
+    "este",
+    "actual",
+    "ahora",
     "tenes",
     "tenés",
     "tengo",
@@ -260,17 +290,23 @@ GENERIC_QUERY_TOKENS = {
     "comun",
     "comunes",
     "con",
+    "contact",
+    "contactless",
+    "contacto",
     "consulta",
     "consultar",
     "contame",
     "cual",
     "cuales",
+    "cuota",
+    "cuotas",
     "dame",
     "de",
     "decime",
     "del",
     "descuento",
     "descuentos",
+    "este",
     "dia",
     "dias",
     "disponible",
@@ -286,7 +322,9 @@ GENERIC_QUERY_TOKENS = {
     "exclusivos",
     "favor",
     "hay",
+    "hasta",
     "hoy",
+    "interes",
     "la",
     "las",
     "lo",
@@ -303,6 +341,8 @@ GENERIC_QUERY_TOKENS = {
     "oferta",
     "ofertas",
     "pago",
+    "pagos",
+    "pagar",
     "para",
     "pedime",
     "por",
@@ -315,12 +355,14 @@ GENERIC_QUERY_TOKENS = {
     "quiero",
     "quisiera",
     "rubro",
+    "sacar",
     "sea",
     "sean",
     "seleccion",
     "ser",
     "si",
     "sin",
+    "sincontacto",
     "solo",
     "sobre",
     "sus",
@@ -329,6 +371,7 @@ GENERIC_QUERY_TOKENS = {
     "tengo",
     "tenés",
     "tienen",
+    "mes",
     "todos",
     "todas",
     "un",
@@ -462,11 +505,30 @@ def infer_benefits_filters(text: str | None) -> dict[str, Any]:
     category = resolve_benefit_category(normalized)
     exclude_eminent = _has_exclude_eminent_intent(normalized)
     only_eminent = _has_only_eminent_intent(normalized) and not exclude_eminent
+    only_qr = any(_contains_term(normalized, pattern) for pattern in QR_PATTERNS)
+    only_nfc = any(_contains_term(normalized, pattern) for pattern in NFC_PATTERNS)
+    today_only = any(_contains_term(normalized, pattern) for pattern in TODAY_PATTERNS)
+    every_day_only = any(_contains_term(normalized, pattern) for pattern in EVERY_DAY_PATTERNS)
+    installments = _extract_installments(normalized)
+    has_installments = _has_installments_intent(normalized) or installments is not None
+    interest_free = _has_interest_free_intent(normalized)
     merchant_names = _detect_merchants(normalized, category=category)
     search_terms = _build_search_terms(
         normalized,
         category=category,
         merchant_names=merchant_names,
+        structured_filters_present=any(
+            [
+                only_eminent,
+                exclude_eminent,
+                only_qr,
+                only_nfc,
+                today_only,
+                every_day_only,
+                has_installments,
+                interest_free,
+            ]
+        ),
     )
     cleaned_query = " ".join(search_terms).strip()
 
@@ -474,10 +536,14 @@ def infer_benefits_filters(text: str | None) -> dict[str, Any]:
         "category": category,
         "only_eminent": only_eminent,
         "exclude_eminent": exclude_eminent,
-        "only_qr": any(_contains_term(normalized, pattern) for pattern in QR_PATTERNS),
-        "only_nfc": any(_contains_term(normalized, pattern) for pattern in NFC_PATTERNS),
-        "today_only": any(_contains_term(normalized, pattern) for pattern in TODAY_PATTERNS),
-        "every_day_only": any(_contains_term(normalized, pattern) for pattern in EVERY_DAY_PATTERNS),
+        "only_qr": only_qr,
+        "only_nfc": only_nfc,
+        "today_only": today_only,
+        "every_day_only": every_day_only,
+        "installments": installments,
+        "has_installments": has_installments,
+        "interest_free": interest_free,
+        "explicit_eminent_black": _mentions_eminent_black(normalized),
         "raw_query": text or "",
         "cleaned_query": cleaned_query,
         "search_terms": search_terms,
@@ -496,6 +562,9 @@ def search_benefits(
     only_nfc: bool = False,
     today_only: bool = False,
     every_day_only: bool = False,
+    installments: int | None = None,
+    has_installments: bool = False,
+    interest_free: bool = False,
     search_terms: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     inferred_filters = infer_benefits_filters(query)
@@ -506,8 +575,19 @@ def search_benefits(
         if _normalize_text(term)
     ]
     should_exclude_eminent = exclude_eminent or inferred_filters["exclude_eminent"]
-    should_only_eminent = only_eminent and not should_exclude_eminent
-    day_filter = _today_day_name() if today_only else None
+    should_only_eminent = (only_eminent or inferred_filters["only_eminent"]) and not should_exclude_eminent
+    effective_only_qr = only_qr or inferred_filters["only_qr"]
+    effective_only_nfc = only_nfc or inferred_filters["only_nfc"]
+    effective_today_only = today_only or inferred_filters["today_only"]
+    effective_every_day_only = every_day_only or inferred_filters["every_day_only"]
+    requested_installments = installments if installments is not None else inferred_filters["installments"]
+    requires_installments = (
+        has_installments
+        or inferred_filters["has_installments"]
+        or requested_installments is not None
+    )
+    requires_interest_free = interest_free or inferred_filters["interest_free"]
+    day_filter = _today_day_name() if effective_today_only else None
 
     results: list[dict[str, Any]] = []
 
@@ -515,22 +595,28 @@ def search_benefits(
         if canonical_category and not _benefit_matches_category(benefit.get("categoria"), canonical_category):
             continue
 
-        if should_exclude_eminent and benefit.get("exclusivoEminent"):
+        if should_exclude_eminent and _is_eminent_benefit(benefit):
             continue
 
-        if should_only_eminent and not benefit.get("exclusivoEminent"):
+        if should_only_eminent and not _is_eminent_benefit(benefit):
             continue
 
-        if only_qr and not benefit.get("pagoQR"):
+        if effective_only_qr and not benefit.get("pagoQR"):
             continue
 
-        if only_nfc and not benefit.get("pagoNFC"):
+        if effective_only_nfc and not _has_nfc_payment(benefit):
             continue
 
-        if every_day_only and not _is_every_day(benefit.get("dias")):
+        if effective_every_day_only and not _is_every_day(benefit.get("dias")):
             continue
 
         if day_filter and not _matches_day(benefit.get("dias"), day_filter):
+            continue
+
+        if requires_installments and not _matches_installments(benefit, requested_installments):
+            continue
+
+        if requires_interest_free and not _matches_interest_free(benefit):
             continue
 
         if normalized_search_terms and not _matches_query_terms(benefit, normalized_search_terms):
@@ -693,6 +779,16 @@ def _normalize_promotion(promo: dict[str, Any]) -> dict[str, Any]:
     commerce = str(promo.get("titulo") or "").strip() or "Beneficio"
     benefit_text = str(promo.get("promocion") or "").strip() or "Beneficio disponible"
     category = str(promo.get("subtitulo") or "").strip() or "Otros"
+    days = str(promo.get("leyendaDiasAplicacion") or "").strip()
+    additional_text = str(promo.get("adicional") or "").strip()
+    model_attention_name = str(modelo_atencion.get("nombre") or "").strip()
+    contact_less = bool(promo.get("contactLess"))
+    eminent_flag = bool(promo.get("eminent"))
+    exclusive_eminent = (
+        eminent_flag
+        or bool(modelo_atencion.get("exclusivo"))
+        or _contains_term(model_attention_name, "eminent")
+    )
     end_date = promo.get("fechaHasta")
 
     return {
@@ -700,16 +796,28 @@ def _normalize_promotion(promo: dict[str, Any]) -> dict[str, Any]:
         "comercio": commerce,
         "beneficio": benefit_text,
         "categoria": category,
-        "dias": str(promo.get("leyendaDiasAplicacion") or "").strip(),
+        "dias": days,
         "mediosDePago": _normalize_payment_methods(promo.get("mediosDePago") or []),
-        "exclusivoEminent": bool(promo.get("eminent")) or bool(modelo_atencion.get("exclusivo")),
+        "exclusivoEminent": exclusive_eminent,
+        "eminent": eminent_flag,
         "pagoQR": bool(promo.get("pagoQR")),
-        "pagoNFC": bool(promo.get("pagoNFC")),
+        "pagoNFC": bool(promo.get("pagoNFC")) or contact_less,
+        "contactLess": contact_less,
         "proximamente": bool(promo.get("proximamente")),
         "fechaHasta": end_date,
         "vigenciaHasta": end_date,
         "imagen": promo.get("imagen"),
         "tipoPromocion": promo.get("tipoPromocion"),
+        "adicional": additional_text,
+        "modeloAtencionNombre": model_attention_name,
+        "raw_text": _build_raw_text(
+            commerce,
+            benefit_text,
+            category,
+            days,
+            additional_text,
+            model_attention_name,
+        ),
         "segmento": BENEFITS_SEGMENT,
     }
 
@@ -782,26 +890,44 @@ def _load_mock_promotions() -> list[dict[str, Any]]:
             if not isinstance(benefit, dict):
                 continue
 
+            commerce = str(benefit.get("comercio") or "").strip() or "Beneficio"
+            benefit_text = str(benefit.get("beneficio") or "").strip() or "Beneficio disponible"
+            days = str(benefit.get("dias") or "").strip()
+            additional_text = str(benefit.get("adicional") or "").strip()
             end_date = benefit.get("fechaHasta") or benefit.get("vigenciaHasta")
+            contact_less = bool(benefit.get("contactLess"))
+            eminent_flag = bool(benefit.get("eminent")) or bool(benefit.get("exclusivoEminent"))
 
             benefits.append(
                 {
                     "id": benefit.get("id"),
-                    "comercio": str(benefit.get("comercio") or "").strip() or "Beneficio",
-                    "beneficio": str(benefit.get("beneficio") or "").strip() or "Beneficio disponible",
+                    "comercio": commerce,
+                    "beneficio": benefit_text,
                     "categoria": category_name,
-                    "dias": str(benefit.get("dias") or "").strip(),
+                    "dias": days,
                     "mediosDePago": _normalize_existing_payment_methods(
                         benefit.get("mediosDePago") or []
                     ),
                     "exclusivoEminent": bool(benefit.get("exclusivoEminent")),
+                    "eminent": eminent_flag,
                     "pagoQR": bool(benefit.get("pagoQR")),
-                    "pagoNFC": bool(benefit.get("pagoNFC")),
+                    "pagoNFC": bool(benefit.get("pagoNFC")) or contact_less,
+                    "contactLess": contact_less,
                     "proximamente": bool(benefit.get("proximamente")),
                     "fechaHasta": end_date,
                     "vigenciaHasta": end_date,
                     "imagen": benefit.get("imagen"),
                     "tipoPromocion": benefit.get("tipoPromocion"),
+                    "adicional": additional_text,
+                    "modeloAtencionNombre": str(benefit.get("modeloAtencionNombre") or "").strip(),
+                    "raw_text": _build_raw_text(
+                        commerce,
+                        benefit_text,
+                        category_name,
+                        days,
+                        additional_text,
+                        str(benefit.get("modeloAtencionNombre") or "").strip(),
+                    ),
                     "segmento": get_benefits_segment(),
                 }
             )
@@ -880,12 +1006,16 @@ def _build_search_terms(
     *,
     category: str | None,
     merchant_names: list[str],
+    structured_filters_present: bool,
 ) -> list[str]:
     if merchant_names:
         primary_merchant = merchant_names[0]
         return [_normalize_text(primary_merchant)]
 
     if category:
+        return []
+
+    if structured_filters_present:
         return []
 
     return _extract_free_text_terms(text)
@@ -990,17 +1120,96 @@ def _has_only_eminent_intent(text: str) -> bool:
     return has_eminent_term or has_exclusive_term
 
 
-def _matches_query_terms(benefit: dict[str, Any], search_terms: list[str]) -> bool:
-    searchable_text = _normalize_text(
-        " ".join(
-            [
-                str(benefit.get("categoria") or ""),
-                str(benefit.get("comercio") or ""),
-                str(benefit.get("beneficio") or ""),
-                " ".join(benefit.get("mediosDePago") or []),
-            ]
-        )
+def _mentions_eminent_black(text: str) -> bool:
+    normalized = _normalize_text(text)
+    return _contains_term(normalized, "eminent black")
+
+
+def _extract_installments(text: str) -> int | None:
+    normalized = _normalize_text(text)
+    if not normalized:
+        return None
+
+    match = re.search(r"\b(?:hasta\s+)?(\d{1,2})\s+cuotas?\b", normalized)
+    if not match:
+        return None
+
+    return _safe_int(match.group(1))
+
+
+def _has_installments_intent(text: str) -> bool:
+    normalized = _normalize_text(text)
+    if not normalized:
+        return False
+
+    if any(_contains_term(normalized, pattern) for pattern in INSTALLMENTS_PATTERNS):
+        return True
+
+    return bool(re.search(r"\b\d{1,2}\s+cuotas?\b", normalized))
+
+
+def _has_interest_free_intent(text: str) -> bool:
+    normalized = _normalize_text(text)
+    if not normalized:
+        return False
+
+    return any(_contains_term(normalized, pattern) for pattern in INTEREST_FREE_PATTERNS)
+
+
+def _build_raw_text(*parts: Any) -> str:
+    return _normalize_text(
+        " ".join(str(part or "").strip() for part in parts if str(part or "").strip())
     )
+
+
+def _is_eminent_benefit(benefit: dict[str, Any]) -> bool:
+    return bool(
+        benefit.get("exclusivoEminent")
+        or benefit.get("eminent")
+        or _contains_term(str(benefit.get("modeloAtencionNombre") or ""), "eminent")
+    )
+
+
+def _has_nfc_payment(benefit: dict[str, Any]) -> bool:
+    return bool(benefit.get("pagoNFC") or benefit.get("contactLess"))
+
+
+def _benefit_raw_text(benefit: dict[str, Any]) -> str:
+    raw_text = str(benefit.get("raw_text") or "").strip()
+    if raw_text:
+        return raw_text
+
+    return _build_raw_text(
+        benefit.get("categoria"),
+        benefit.get("comercio"),
+        benefit.get("beneficio"),
+        benefit.get("dias"),
+        benefit.get("adicional"),
+        " ".join(benefit.get("mediosDePago") or []),
+    )
+
+
+def _matches_installments(benefit: dict[str, Any], installments: int | None) -> bool:
+    raw_text = _benefit_raw_text(benefit)
+    if not raw_text:
+        return False
+
+    if installments is None:
+        return _contains_term(raw_text, "cuotas") or _contains_term(raw_text, "cuota")
+
+    return bool(re.search(rf"\b(?:hasta\s+)?{installments}\s+cuotas?\b", raw_text))
+
+
+def _matches_interest_free(benefit: dict[str, Any]) -> bool:
+    raw_text = _benefit_raw_text(benefit)
+    if not raw_text:
+        return False
+
+    return _contains_term(raw_text, "sin interes")
+
+
+def _matches_query_terms(benefit: dict[str, Any], search_terms: list[str]) -> bool:
+    searchable_text = _benefit_raw_text(benefit)
     return all(term in searchable_text for term in search_terms)
 
 
