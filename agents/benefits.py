@@ -57,6 +57,9 @@ def benefits_node(state: AgentState) -> AgentState:
             only_nfc=filters["only_nfc"],
             today_only=filters["today_only"],
             every_day_only=filters["every_day_only"],
+            installments=filters["installments"],
+            has_installments=filters["has_installments"],
+            interest_free=filters["interest_free"],
             search_terms=filters["search_terms"],
             limit=5,
         )
@@ -80,6 +83,9 @@ def benefits_node(state: AgentState) -> AgentState:
             "exclude_eminent": filters["exclude_eminent"],
             "only_qr": filters["only_qr"],
             "only_nfc": filters["only_nfc"],
+            "installments": filters["installments"],
+            "has_installments": filters["has_installments"],
+            "interest_free": filters["interest_free"],
             "results_count": len(results),
         },
     )
@@ -121,6 +127,9 @@ def _resolve_benefits_filters(
 
     exclude_eminent = bool(current_filters["exclude_eminent"])
     only_eminent = bool(current_filters["only_eminent"]) and not exclude_eminent
+    installments = current_filters["installments"]
+    has_installments = bool(current_filters["has_installments"])
+    interest_free = bool(current_filters["interest_free"])
 
     cleaned_query = current_filters["cleaned_query"]
     search_terms = list(current_filters["search_terms"])
@@ -145,6 +154,10 @@ def _resolve_benefits_filters(
         "only_nfc": current_filters["only_nfc"],
         "today_only": current_filters["today_only"],
         "every_day_only": current_filters["every_day_only"],
+        "installments": installments,
+        "has_installments": has_installments,
+        "interest_free": interest_free,
+        "explicit_eminent_black": bool(current_filters["explicit_eminent_black"]),
     }
 
 
@@ -165,6 +178,9 @@ def _can_use_standalone_context(
             current_filters["only_nfc"],
             current_filters["today_only"],
             current_filters["every_day_only"],
+            current_filters["installments"],
+            current_filters["has_installments"],
+            current_filters["interest_free"],
             current_filters["search_terms"],
         ]
     ):
@@ -187,6 +203,9 @@ def _should_show_categories_summary(filters: dict[str, Any]) -> bool:
             filters["only_nfc"],
             filters["today_only"],
             filters["every_day_only"],
+            filters["installments"],
+            filters["has_installments"],
+            filters["interest_free"],
             filters["search_terms"],
         ]
     )
@@ -225,7 +244,7 @@ def _build_results_answer(results: list[dict[str, Any]], filters: dict[str, Any]
 
 def _build_results_header(results: list[dict[str, Any]], filters: dict[str, Any]) -> str:
     category = filters["category"]
-    segment = get_benefits_segment()
+    segment = _eminent_label(filters)
     commerce_name = _unique_commerce_name(results)
     inferred_category = _unique_category_name(results)
 
@@ -252,6 +271,33 @@ def _build_results_header(results: list[dict[str, Any]], filters: dict[str, Any]
 
     if filters["only_nfc"]:
         return "📲 Encontré estos beneficios con *Pago NFC*:"
+
+    if filters["installments"] and filters["interest_free"] and category:
+        return (
+            f"💳 Encontré estas promociones de *{category}* con "
+            f"*{filters['installments']} cuotas sin interés*:"
+        )
+
+    if filters["installments"] and filters["interest_free"]:
+        return f"💳 Encontré estas promociones con *{filters['installments']} cuotas sin interés*:"
+
+    if filters["installments"] and category:
+        return f"💳 Encontré estas promociones de *{category}* con *{filters['installments']} cuotas*:"
+
+    if filters["installments"]:
+        return f"💳 Encontré estas promociones con *{filters['installments']} cuotas*:"
+
+    if filters["has_installments"] and filters["interest_free"] and category:
+        return f"💳 Encontré estas promociones de *{category}* en *cuotas sin interés*:"
+
+    if filters["has_installments"] and filters["interest_free"]:
+        return "💳 Encontré estas promociones en *cuotas sin interés*:"
+
+    if filters["has_installments"] and category:
+        return f"💳 Encontré estas promociones de *{category}* en *cuotas*:"
+
+    if filters["has_installments"]:
+        return "💳 Encontré estas promociones en *cuotas*:"
 
     if filters["today_only"] and category:
         return f"📅 Encontré estos beneficios de *{category}* disponibles *hoy*:"
@@ -354,13 +400,51 @@ def _format_payment_methods(methods: list[str]) -> str:
 
 
 def _build_no_results_answer(filters: dict[str, Any]) -> str:
-    categories = ", ".join(list_benefit_categories())
-    qualifier = _describe_filters(filters)
+    if filters["only_eminent"]:
+        segment = _eminent_label(filters)
+        return (
+            f"🔎 No encontré beneficios exclusivos {segment} en las promociones disponibles ahora. "
+            "Podés probar por categoría, por ejemplo Indumentaria, Viajes o Gastronomía."
+        )
 
-    return (
-        f"🔎 No encontré beneficios para {qualifier}. "
-        f"Si querés, podés consultar por categoría: {categories}."
-    )
+    if filters["only_nfc"]:
+        return (
+            "🔎 No encontré promociones con pago NFC en las promociones disponibles ahora. "
+            "Sí podés consultar beneficios por QR, categoría o comercio."
+        )
+
+    if filters["installments"] and filters["interest_free"]:
+        return (
+            f"🔎 No encontré promociones con {filters['installments']} cuotas sin interés "
+            "en las promociones disponibles ahora."
+        )
+
+    if filters["installments"]:
+        return (
+            f"🔎 No encontré promociones con {filters['installments']} cuotas "
+            "en las promociones disponibles ahora."
+        )
+
+    if filters["has_installments"] and filters["interest_free"]:
+        return "🔎 No encontré promociones en cuotas sin interés en las promociones disponibles ahora."
+
+    if filters["has_installments"]:
+        return "🔎 No encontré promociones en cuotas en las promociones disponibles ahora."
+
+    if filters["only_qr"]:
+        return "🔎 No encontré promociones con pago QR en las promociones disponibles ahora."
+
+    if filters["category"]:
+        return f"🔎 No encontré beneficios para {filters['category']} en las promociones disponibles ahora."
+
+    if filters["today_only"]:
+        return "🔎 No encontré beneficios disponibles hoy en las promociones disponibles ahora."
+
+    if filters["every_day_only"]:
+        return "🔎 No encontré beneficios para usar todos los días en las promociones disponibles ahora."
+
+    qualifier = _describe_filters(filters)
+    return f"🔎 No encontré beneficios para {qualifier} en las promociones disponibles ahora."
 
 
 def _describe_filters(filters: dict[str, Any]) -> str:
@@ -374,13 +458,25 @@ def _describe_filters(filters: dict[str, Any]) -> str:
         return "beneficios no exclusivos Eminent"
 
     if filters["only_eminent"]:
-        return "*Eminent Black*"
+        return f"*{_eminent_label(filters)}*"
 
     if filters["only_qr"]:
         return "*Pago QR*"
 
     if filters["only_nfc"]:
         return "*Pago NFC*"
+
+    if filters["installments"] and filters["interest_free"]:
+        return f"*{filters['installments']} cuotas sin interés*"
+
+    if filters["installments"]:
+        return f"*{filters['installments']} cuotas*"
+
+    if filters["has_installments"] and filters["interest_free"]:
+        return "*cuotas sin interés*"
+
+    if filters["has_installments"]:
+        return "*cuotas*"
 
     if filters["today_only"]:
         return "*hoy*"
@@ -404,3 +500,9 @@ def _normalize_text(text: str) -> str:
     lowered = re.sub(r"[^\w\s]", " ", lowered)
     lowered = re.sub(r"\s+", " ", lowered)
     return lowered.strip()
+
+
+def _eminent_label(filters: dict[str, Any]) -> str:
+    if filters.get("explicit_eminent_black"):
+        return get_benefits_segment()
+    return "Eminent"

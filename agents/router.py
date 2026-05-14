@@ -113,7 +113,8 @@ LOANS_PATTERNS = (
     "hipotecario",
     "cuota del prestamo",
     "cuotas del prestamo",
-    "cuota",
+    "cuota del credito",
+    "cuotas del credito",
     "precancel",
     "prendario",
     "deuda vencida",
@@ -132,6 +133,14 @@ BENEFITS_PATTERNS = (
     "ahorro",
     "oferta",
     "ofertas",
+    "cuota",
+    "cuotas",
+    "sin interes",
+    "qr",
+    "nfc",
+    "contactless",
+    "contact less",
+    "sin contacto",
     "eminent",
     "eminent black",
     "seleccion exclusiva",
@@ -145,6 +154,26 @@ BENEFITS_PATTERNS = (
     "tecnologia",
     "hogar",
     "casa",
+)
+
+BENEFITS_CONTEXT_PATTERNS = (
+    "beneficio",
+    "beneficios",
+    "promo",
+    "promos",
+    "promocion",
+    "promociones",
+    "descuento",
+    "descuentos",
+    "ahorro",
+    "oferta",
+    "ofertas",
+    "qr",
+    "nfc",
+    "contactless",
+    "contact less",
+    "sin contacto",
+    "eminent",
 )
 
 CHITCHAT_EXACT = {
@@ -253,6 +282,9 @@ def _is_bcra_identification_followup(
 
 
 def _is_loans_request(normalized_question: str) -> bool:
+    if _has_benefits_context(normalized_question):
+        return False
+
     return any(pattern in normalized_question for pattern in LOANS_PATTERNS)
 
 
@@ -263,6 +295,13 @@ def _is_benefits_request(normalized_question: str) -> bool:
     return any(
         _contains_normalized_term(normalized_question, pattern)
         for pattern in BENEFITS_PATTERNS
+    )
+
+
+def _has_benefits_context(normalized_question: str) -> bool:
+    return any(
+        _contains_normalized_term(normalized_question, pattern)
+        for pattern in BENEFITS_CONTEXT_PATTERNS
     )
 
 
@@ -407,13 +446,14 @@ def router_node(
                             "chitchat, loans_rag, bcra_credit_status, branch_locator, benefits, fallback, sensitive.\n\n"
                             "Usa chitchat para saludos, agradecimientos o charla simple.\n"
                             "Usa loans_rag para consultas sobre prestamos, adelanto de sueldo, "
-                            "cuotas, precancelacion, prestamos hipotecarios o prendarios.\n"
+                            "cuotas de prestamos, precancelacion, prestamos hipotecarios o prendarios.\n"
                             "Usa bcra_credit_status cuando el usuario quiera consultar situacion "
                             "crediticia, Central de Deudores, BCRA o deudas bancarias.\n"
                             "Usa branch_locator cuando el usuario quiera buscar sucursales "
                             "Galicia cercanas a su ubicacion actual.\n"
                             "Usa benefits cuando el usuario pregunte por beneficios, promociones, "
-                            "descuentos, ofertas, categorias de beneficios o beneficios del "
+                            "descuentos, ofertas, categorias de beneficios, cuotas en promociones, "
+                            "promociones sin interes, pago QR, pago NFC o beneficios del "
                             "segmento Eminent o Eminent Black.\n"
                             "Usa sensitive si el usuario pide revelar, mostrar, recuperar o "
                             "compartir claves, contrasenas, PIN, tokens, CVV o datos privados.\n"
