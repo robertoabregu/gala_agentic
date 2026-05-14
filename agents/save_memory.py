@@ -22,6 +22,23 @@ def _infer_topic(route: str) -> str:
     return TOPIC_BY_ROUTE.get(route, route or "")
 
 
+def _get_memory_question(state: AgentState, memory: dict) -> str:
+    route = state.get("route", "")
+
+    if route == "benefits":
+        return (
+            state.get("question")
+            or state.get("original_question")
+            or memory.get("last_user_question", "")
+        )
+
+    return (
+        state.get("standalone_question")
+        or state.get("question")
+        or memory.get("last_user_question", "")
+    )
+
+
 def save_memory_node(state: AgentState) -> AgentState:
     session_id = state.get("session_id", "demo-local")
     memory = state.get("memory") or {}
@@ -39,11 +56,7 @@ def save_memory_node(state: AgentState) -> AgentState:
         updated_memory = clear_pending(memory)
 
     if final_answer != FALLBACK_ANSWER:
-        last_user_question = (
-            state.get("standalone_question")
-            or state.get("question")
-            or memory.get("last_user_question", "")
-        )
+        last_user_question = _get_memory_question(state, memory)
         updated_memory["last_user_question"] = mask_sensitive_text(last_user_question)
         updated_memory["last_assistant_answer"] = mask_sensitive_text(final_answer)
 

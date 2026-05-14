@@ -29,6 +29,7 @@ CATEGORY_SYNONYMS = {
         "supermercado",
         "supermercados",
         "mercado",
+        "superes",
         "compras del super",
         "promos del super",
         "beneficios del super",
@@ -36,8 +37,8 @@ CATEGORY_SYNONYMS = {
     "Gastronomía": (
         "gastronomia",
         "gastronomía",
-        "restaurantes",
         "restaurante",
+        "restaurantes",
         "comida",
         "cafe",
         "café",
@@ -64,14 +65,54 @@ CATEGORY_SYNONYMS = {
     ),
 }
 
-EMINENT_PATTERNS = (
+ONLY_EMINENT_PATTERNS = (
     "eminent",
     "eminent black",
-    "black",
+    "por ser eminent",
+    "para eminent",
+    "para eminent black",
+    "beneficios eminent",
+    "beneficios para eminent",
+    "beneficios por ser eminent",
+    "solo eminent",
+    "solo beneficios eminent",
+    "solo exclusivos",
+    "solo exclusivas",
+    "solo exclusivo",
+    "solo exclusiva",
+    "beneficios exclusivos",
+    "beneficios exclusivas",
+    "promo exclusiva",
+    "promos exclusivas",
+    "promos exclusivos",
+)
+
+EXCLUDE_EMINENT_PATTERNS = (
+    "no eminent",
+    "no sean eminent",
+    "no sean para eminent",
+    "no exclusivo",
+    "no exclusiva",
+    "no exclusivos",
+    "no exclusivas",
+    "que no sean exclusivos",
+    "que no sean exclusivas",
+    "que no sean para eminent",
+    "que no sean eminent",
+    "comun",
+    "comunes",
+)
+
+EMINENT_TERMS = (
+    "eminent",
+    "eminent black",
+)
+
+EXCLUSIVE_TERMS = (
     "exclusivo",
+    "exclusiva",
     "exclusivos",
-    "seleccion exclusiva",
-    "selección exclusiva",
+    "exclusivas",
 )
 
 QR_PATTERNS = ("qr", "pago qr")
@@ -82,20 +123,25 @@ EVERY_DAY_PATTERNS = ("todos los dias", "todos los días")
 IGNORED_QUERY_TOKENS = {
     "a",
     "al",
-    "alguno",
+    "algo",
     "algun",
+    "alguno",
     "beneficio",
     "beneficios",
     "black",
     "banco",
+    "cafe",
+    "casa",
     "categoria",
     "categorias",
+    "comida",
+    "comun",
+    "comunes",
     "compra",
     "compras",
     "con",
     "cual",
     "cuales",
-    "como",
     "de",
     "del",
     "descuento",
@@ -105,13 +151,19 @@ IGNORED_QUERY_TOKENS = {
     "el",
     "eminent",
     "en",
+    "esos",
+    "esas",
+    "exclusiva",
+    "exclusivas",
     "exclusivo",
     "exclusivos",
     "favor",
     "hay",
+    "hogar",
     "hoy",
     "la",
     "las",
+    "lo",
     "los",
     "me",
     "mercado",
@@ -119,7 +171,9 @@ IGNORED_QUERY_TOKENS = {
     "mis",
     "mostrame",
     "mostrar",
+    "muebles",
     "nfc",
+    "no",
     "oferta",
     "ofertas",
     "pago",
@@ -133,7 +187,10 @@ IGNORED_QUERY_TOKENS = {
     "qr",
     "que",
     "quiero",
+    "sea",
+    "sean",
     "seleccion",
+    "ser",
     "si",
     "solo",
     "sus",
@@ -144,13 +201,16 @@ IGNORED_QUERY_TOKENS = {
     "tienen",
     "todos",
     "todas",
+    "un",
+    "una",
     "vigente",
     "vigentes",
     "y",
     "yo",
 }
 
-def _normalize_alias(text: str) -> str:
+
+def _normalize_text(text: str | None) -> str:
     normalized = unicodedata.normalize("NFKD", text or "")
     without_accents = "".join(
         char for char in normalized
@@ -162,14 +222,9 @@ def _normalize_alias(text: str) -> str:
     return lowered.strip()
 
 
-def _normalize_text(text: str | None) -> str:
-    return _normalize_alias(text or "")
-
-
 for aliases in CATEGORY_SYNONYMS.values():
     for alias in aliases:
-        normalized_alias = _normalize_alias(alias)
-        for token in re.split(r"\s+", normalized_alias):
+        for token in _normalize_text(alias).split():
             if token:
                 IGNORED_QUERY_TOKENS.add(token)
 
@@ -226,10 +281,13 @@ def resolve_benefit_category(text: str | None) -> str | None:
 def infer_benefits_filters(text: str | None) -> dict[str, Any]:
     normalized = _normalize_text(text)
     category = resolve_benefit_category(normalized)
+    exclude_eminent = _has_exclude_eminent_intent(normalized)
+    only_eminent = _has_only_eminent_intent(normalized) and not exclude_eminent
 
     return {
         "category": category,
-        "only_eminent": any(_contains_term(normalized, pattern) for pattern in EMINENT_PATTERNS),
+        "only_eminent": only_eminent,
+        "exclude_eminent": exclude_eminent,
         "only_qr": any(_contains_term(normalized, pattern) for pattern in QR_PATTERNS),
         "only_nfc": any(_contains_term(normalized, pattern) for pattern in NFC_PATTERNS),
         "today_only": any(_contains_term(normalized, pattern) for pattern in TODAY_PATTERNS),
@@ -242,6 +300,7 @@ def search_benefits(
     category: str | None = None,
     query: str | None = None,
     only_eminent: bool = False,
+    exclude_eminent: bool = False,
     limit: int = 5,
     *,
     only_qr: bool = False,
@@ -252,6 +311,8 @@ def search_benefits(
     inferred_filters = infer_benefits_filters(query)
     canonical_category = resolve_benefit_category(category) or inferred_filters["category"]
     search_terms = inferred_filters["search_terms"]
+    should_exclude_eminent = exclude_eminent or inferred_filters["exclude_eminent"]
+    should_only_eminent = only_eminent and not should_exclude_eminent
     day_filter = _today_day_name() if today_only else None
 
     results: list[dict[str, Any]] = []
@@ -260,7 +321,10 @@ def search_benefits(
         if canonical_category and benefit["categoria"] != canonical_category:
             continue
 
-        if only_eminent and not benefit.get("exclusivoEminent"):
+        if should_exclude_eminent and benefit.get("exclusivoEminent"):
+            continue
+
+        if should_only_eminent and not benefit.get("exclusivoEminent"):
             continue
 
         if only_qr and not benefit.get("pagoQR"):
@@ -396,6 +460,38 @@ def _token_is_category_related(token: str, category: str | None) -> bool:
                 return True
 
     return False
+
+
+def _has_exclude_eminent_intent(text: str) -> bool:
+    normalized = _normalize_text(text)
+    if not normalized:
+        return False
+
+    if any(_contains_term(normalized, pattern) for pattern in EXCLUDE_EMINENT_PATTERNS):
+        return True
+
+    negative_patterns = (
+        r"\bno\b.*\beminent\b",
+        r"\bno\b.*\bexclusiv\w*\b",
+        r"\bque no sean\b.*\beminent\b",
+        r"\bque no sean\b.*\bexclusiv\w*\b",
+    )
+
+    return any(re.search(pattern, normalized) for pattern in negative_patterns)
+
+
+def _has_only_eminent_intent(text: str) -> bool:
+    normalized = _normalize_text(text)
+    if not normalized:
+        return False
+
+    if any(_contains_term(normalized, pattern) for pattern in ONLY_EMINENT_PATTERNS):
+        return True
+
+    has_eminent_term = any(_contains_term(normalized, term) for term in EMINENT_TERMS)
+    has_exclusive_term = any(_contains_term(normalized, term) for term in EXCLUSIVE_TERMS)
+
+    return has_eminent_term or has_exclusive_term
 
 
 def _matches_query_terms(benefit: dict[str, Any], search_terms: list[str]) -> bool:

@@ -61,7 +61,8 @@ def _build_greeting_response(user_name: str = "") -> str:
         "Actualmente puedo ayudarte con:\n\n"
         "💰 Consultas sobre *préstamos*\n"
         "📊 Consulta de *situación crediticia*\n"
-        "📍 Búsqueda de *sucursales cercanas*"
+        "📍 Búsqueda de *sucursales cercanas*\n"
+        "🎁 Búsqueda de *beneficios*"
     )
 
 
@@ -75,19 +76,19 @@ def _fallback_chitchat_response(normalized_question: str, user_name: str = "") -
         return (
             "Soy Gala, el asistente virtual de Banco Galicia.\n\n"
             "Actualmente puedo ayudarte con consultas sobre *préstamos*, "
-            "*situación crediticia* o *búsqueda de sucursales cercanas*."
+            "*situación crediticia*, *búsqueda de sucursales cercanas* o *beneficios*."
         )
 
     if normalized_question in {"como estas", "como andas"}:
         return (
             f"Muy bien{name_part}, gracias 😊\n\n"
             "Actualmente puedo ayudarte con consultas sobre *préstamos*, "
-            "*situación crediticia* o *búsqueda de sucursales cercanas*."
+            "*situación crediticia*, *búsqueda de sucursales cercanas* o *beneficios*."
         )
 
     return (
         f"Hola{name_part}. Actualmente puedo ayudarte con consultas sobre "
-        "*préstamos*, *situación crediticia* o *búsqueda de sucursales cercanas*."
+        "*préstamos*, *situación crediticia*, *búsqueda de sucursales cercanas* o *beneficios*."
     )
 
 
@@ -136,7 +137,7 @@ Reglas:
 - Si el usuario hace charla casual fuera del alcance bancario, respondé amable pero NO continúes el tema.
 - No hagas preguntas para seguir conversaciones casuales.
 - No opines sobre fútbol, política, famosos, noticias, clima u otros temas fuera del alcance.
-- Redirigí suavemente hacia consultas sobre préstamos, situación crediticia o búsqueda de sucursales cercanas cuando corresponda.
+- Redirigí suavemente hacia consultas sobre préstamos, situación crediticia, búsqueda de sucursales cercanas o beneficios cuando corresponda.
 - No digas siempre la misma frase de redirección.
 - Si el usuario solo saluda, saludá y ofrecé ayuda bancaria de forma natural.
 - Si agradece, respondé de forma breve y cálida.
@@ -145,7 +146,7 @@ Reglas:
 - Nunca cierres una respuesta casual con preguntas como “¿Te gusta Boca?”, “¿Querés hablar de eso?” o similares.
 - Si se informa un nombre del usuario, podés usarlo naturalmente en saludos o despedidas.
 - No uses el nombre del usuario en todas las respuestas.
-- Actualmente podés ayudar con préstamos, situación crediticia y búsqueda de sucursales cercanas.
+- Actualmente podés ayudar con préstamos, situación crediticia, búsqueda de sucursales cercanas y beneficios.
 """.strip()
 
     user_context = ""

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import re
+import unicodedata
 from typing import Any
 
 from agents.state import AgentState
+from core.privacy import mask_sensitive_text
 from observability.logger import log_step
 from tools.benefits_mock import (
     get_benefits_segment,
@@ -20,23 +23,25 @@ CATEGORY_EMOJIS = {
     "Hogar": "🏠",
 }
 
+REFERENCE_FOLLOWUP_PATTERNS = (
+    "esos",
+    "esas",
+    "los mismos",
+    "las mismas",
+    "los de antes",
+    "las de antes",
+    "los anteriores",
+    "las anteriores",
+)
+
 
 def benefits_node(state: AgentState) -> AgentState:
-    question = (state.get("standalone_question") or state.get("question") or "").strip()
-    filters = infer_benefits_filters(question)
-
-    log_step(
-        "BENEFITS",
-        "Consulta de beneficios interpretada",
-        {
-            "category": filters["category"],
-            "only_eminent": filters["only_eminent"],
-            "only_qr": filters["only_qr"],
-            "only_nfc": filters["only_nfc"],
-            "today_only": filters["today_only"],
-            "every_day_only": filters["every_day_only"],
-            "search_terms": filters["search_terms"],
-        },
+    question = (state.get("question") or "").strip()
+    standalone_question = (state.get("standalone_question") or question).strip()
+    filters = _resolve_benefits_filters(
+        question=question,
+        standalone_question=standalone_question,
+        is_followup=bool(state.get("is_followup")),
     )
 
     if _should_show_categories_summary(filters):
@@ -45,8 +50,9 @@ def benefits_node(state: AgentState) -> AgentState:
     else:
         results = search_benefits(
             category=filters["category"],
-            query=question,
+            query=filters["query"],
             only_eminent=filters["only_eminent"],
+            exclude_eminent=filters["exclude_eminent"],
             only_qr=filters["only_qr"],
             only_nfc=filters["only_nfc"],
             today_only=filters["today_only"],
@@ -59,12 +65,27 @@ def benefits_node(state: AgentState) -> AgentState:
         else:
             answer = _build_no_results_answer(filters)
 
+    log_step(
+        "BENEFITS",
+        "Filtros detectados",
+        {
+            "question": mask_sensitive_text(question),
+            "standalone_question": mask_sensitive_text(standalone_question),
+            "category": filters["category"],
+            "query": mask_sensitive_text(filters["query"]),
+            "only_eminent": filters["only_eminent"],
+            "exclude_eminent": filters["exclude_eminent"],
+            "results": len(results),
+        },
+    )
+
     return {
         **state,
         "route": "benefits",
         "tool_name": "benefits_mock",
         "tool_input": {
             "question": question,
+            "standalone_question": standalone_question,
             **filters,
         },
         "tool_output": {
@@ -80,11 +101,70 @@ def benefits_node(state: AgentState) -> AgentState:
     }
 
 
+def _resolve_benefits_filters(
+    *,
+    question: str,
+    standalone_question: str,
+    is_followup: bool,
+) -> dict[str, Any]:
+    current_filters = infer_benefits_filters(question)
+    standalone_filters = infer_benefits_filters(standalone_question)
+
+    category = current_filters["category"]
+    if not category and _can_use_standalone_category(question, current_filters, is_followup):
+        category = standalone_filters["category"]
+
+    exclude_eminent = bool(current_filters["exclude_eminent"])
+    only_eminent = bool(current_filters["only_eminent"]) and not exclude_eminent
+
+    return {
+        "category": category,
+        "query": question,
+        "only_eminent": only_eminent,
+        "exclude_eminent": exclude_eminent,
+        "only_qr": current_filters["only_qr"],
+        "only_nfc": current_filters["only_nfc"],
+        "today_only": current_filters["today_only"],
+        "every_day_only": current_filters["every_day_only"],
+        "search_terms": current_filters["search_terms"],
+    }
+
+
+def _can_use_standalone_category(
+    question: str,
+    current_filters: dict[str, Any],
+    is_followup: bool,
+) -> bool:
+    if not is_followup:
+        return False
+
+    if any(
+        [
+            current_filters["category"],
+            current_filters["only_eminent"],
+            current_filters["exclude_eminent"],
+            current_filters["only_qr"],
+            current_filters["only_nfc"],
+            current_filters["today_only"],
+            current_filters["every_day_only"],
+            current_filters["search_terms"],
+        ]
+    ):
+        return False
+
+    normalized_question = _normalize_text(question)
+    return any(
+        re.search(rf"\b{re.escape(pattern)}\b", normalized_question)
+        for pattern in REFERENCE_FOLLOWUP_PATTERNS
+    )
+
+
 def _should_show_categories_summary(filters: dict[str, Any]) -> bool:
     return not any(
         [
             filters["category"],
             filters["only_eminent"],
+            filters["exclude_eminent"],
             filters["only_qr"],
             filters["only_nfc"],
             filters["today_only"],
@@ -130,6 +210,12 @@ def _build_results_header(results: list[dict[str, Any]], filters: dict[str, Any]
     segment = get_benefits_segment()
     commerce_name = _unique_commerce_name(results)
     inferred_category = _unique_category_name(results)
+
+    if filters["exclude_eminent"] and category:
+        return f"🎁 Encontré estos beneficios de *{category}* que no son exclusivos *{segment}*:"
+
+    if filters["exclude_eminent"]:
+        return f"🎁 Encontré estos beneficios que no son exclusivos *{segment}*:"
 
     if filters["only_eminent"] and category:
         return f"💎 Encontré estos beneficios de *{category}* para *{segment}*:"
@@ -260,8 +346,14 @@ def _build_no_results_answer(filters: dict[str, Any]) -> str:
 
 
 def _describe_filters(filters: dict[str, Any]) -> str:
+    if filters["category"] and filters["exclude_eminent"]:
+        return f"*{filters['category']}* que no sea exclusivo Eminent"
+
     if filters["category"]:
         return f"*{filters['category']}*"
+
+    if filters["exclude_eminent"]:
+        return "beneficios no exclusivos Eminent"
 
     if filters["only_eminent"]:
         return "*Eminent Black*"
@@ -282,3 +374,15 @@ def _describe_filters(filters: dict[str, Any]) -> str:
         return f"ese criterio (*{' '.join(filters['search_terms'])}*)"
 
     return "ese criterio"
+
+
+def _normalize_text(text: str) -> str:
+    normalized = unicodedata.normalize("NFKD", text or "")
+    without_accents = "".join(
+        char for char in normalized
+        if not unicodedata.combining(char)
+    )
+    lowered = without_accents.lower()
+    lowered = re.sub(r"[^\w\s]", " ", lowered)
+    lowered = re.sub(r"\s+", " ", lowered)
+    return lowered.strip()
