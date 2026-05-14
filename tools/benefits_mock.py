@@ -25,9 +25,13 @@ DAYS_ORDER = [
 CATEGORY_SYNONYMS = {
     "Supermercados": (
         "super",
+        "súper",
         "supermercado",
         "supermercados",
-        "superes",
+        "mercado",
+        "compras del super",
+        "promos del super",
+        "beneficios del super",
     ),
     "Gastronomía": (
         "gastronomia",
@@ -86,18 +90,21 @@ IGNORED_QUERY_TOKENS = {
     "banco",
     "categoria",
     "categorias",
-    "cual",
-    "como",
+    "compra",
+    "compras",
     "con",
+    "cual",
     "cuales",
-    "cuales",
+    "como",
     "de",
     "del",
     "descuento",
     "descuentos",
+    "dia",
+    "dias",
     "el",
-    "en",
     "eminent",
+    "en",
     "exclusivo",
     "exclusivos",
     "favor",
@@ -107,6 +114,7 @@ IGNORED_QUERY_TOKENS = {
     "las",
     "los",
     "me",
+    "mercado",
     "mi",
     "mis",
     "mostrame",
@@ -114,8 +122,8 @@ IGNORED_QUERY_TOKENS = {
     "nfc",
     "oferta",
     "ofertas",
-    "para",
     "pago",
+    "para",
     "pedime",
     "por",
     "promo",
@@ -130,35 +138,19 @@ IGNORED_QUERY_TOKENS = {
     "solo",
     "sus",
     "tengo",
-    "tienen",
     "tenemos",
     "tenes",
     "tenés",
-    "dia",
-    "dias",
+    "tienen",
     "todos",
     "todas",
     "vigente",
     "vigentes",
+    "y",
+    "yo",
 }
 
-for aliases in CATEGORY_SYNONYMS.values():
-    for alias in aliases:
-        normalized_alias = (
-            unicodedata.normalize("NFKD", alias)
-            .encode("ascii", "ignore")
-            .decode("ascii")
-            .lower()
-        )
-        for token in re.split(r"\s+", normalized_alias):
-            if token:
-                IGNORED_QUERY_TOKENS.add(token)
-
-for day_name in DAYS_ORDER:
-    IGNORED_QUERY_TOKENS.add(day_name)
-
-
-def _normalize_text(text: str | None) -> str:
+def _normalize_alias(text: str) -> str:
     normalized = unicodedata.normalize("NFKD", text or "")
     without_accents = "".join(
         char for char in normalized
@@ -168,6 +160,21 @@ def _normalize_text(text: str | None) -> str:
     lowered = re.sub(r"[^\w\s]", " ", lowered)
     lowered = re.sub(r"\s+", " ", lowered)
     return lowered.strip()
+
+
+def _normalize_text(text: str | None) -> str:
+    return _normalize_alias(text or "")
+
+
+for aliases in CATEGORY_SYNONYMS.values():
+    for alias in aliases:
+        normalized_alias = _normalize_alias(alias)
+        for token in re.split(r"\s+", normalized_alias):
+            if token:
+                IGNORED_QUERY_TOKENS.add(token)
+
+for day_name in DAYS_ORDER:
+    IGNORED_QUERY_TOKENS.add(day_name)
 
 
 def _contains_term(text: str, term: str) -> bool:
@@ -206,11 +213,11 @@ def resolve_benefit_category(text: str | None) -> str | None:
         return None
 
     for category in list_benefit_categories():
-        if _contains_term(normalized, category):
+        if _text_matches_category(normalized, category):
             return category
 
     for category, aliases in CATEGORY_SYNONYMS.items():
-        if any(_contains_term(normalized, alias) for alias in aliases):
+        if any(_text_matches_alias(normalized, alias) for alias in aliases):
             return category
 
     return None
@@ -227,7 +234,7 @@ def infer_benefits_filters(text: str | None) -> dict[str, Any]:
         "only_nfc": any(_contains_term(normalized, pattern) for pattern in NFC_PATTERNS),
         "today_only": any(_contains_term(normalized, pattern) for pattern in TODAY_PATTERNS),
         "every_day_only": any(_contains_term(normalized, pattern) for pattern in EVERY_DAY_PATTERNS),
-        "search_terms": _extract_search_terms(normalized),
+        "search_terms": _extract_search_terms(normalized, category=category),
     }
 
 
@@ -307,12 +314,88 @@ def _iter_benefits() -> list[dict[str, Any]]:
     return items
 
 
-def _extract_search_terms(text: str) -> list[str]:
+def _extract_search_terms(text: str, *, category: str | None = None) -> list[str]:
+    cleaned_text = _strip_category_terms(text, category)
+
     return [
         token
-        for token in _normalize_text(text).split()
-        if len(token) >= 2 and token not in IGNORED_QUERY_TOKENS
+        for token in cleaned_text.split()
+        if len(token) >= 3
+        and token not in IGNORED_QUERY_TOKENS
+        and not _token_is_category_related(token, category)
     ]
+
+
+def _strip_category_terms(text: str, category: str | None) -> str:
+    cleaned_text = f" {_normalize_text(text)} "
+    aliases: list[str] = []
+
+    if category:
+        aliases.append(category)
+        aliases.extend(CATEGORY_SYNONYMS.get(category, ()))
+
+    for alias in aliases:
+        normalized_alias = _normalize_text(alias)
+        if not normalized_alias:
+            continue
+        cleaned_text = cleaned_text.replace(f" {normalized_alias} ", " ")
+
+    cleaned_text = re.sub(r"\s+", " ", cleaned_text)
+    return cleaned_text.strip()
+
+
+def _text_matches_category(text: str, category: str) -> bool:
+    if _contains_term(text, category):
+        return True
+
+    return _text_matches_alias(text, category)
+
+
+def _text_matches_alias(text: str, alias: str) -> bool:
+    if _contains_term(text, alias):
+        return True
+
+    normalized_text = _normalize_text(text)
+    normalized_alias = _normalize_text(alias)
+    if " " in normalized_alias:
+        return False
+
+    alias_tokens = normalized_alias.split()
+    text_tokens = normalized_text.split()
+
+    for alias_token in alias_tokens:
+        if len(alias_token) < 5 or alias_token in IGNORED_QUERY_TOKENS:
+            continue
+
+        for text_token in text_tokens:
+            if len(text_token) < 5 or text_token in IGNORED_QUERY_TOKENS:
+                continue
+
+            if alias_token.startswith(text_token) or text_token.startswith(alias_token):
+                return True
+
+    return False
+
+
+def _token_is_category_related(token: str, category: str | None) -> bool:
+    if not category:
+        return False
+
+    normalized_token = _normalize_text(token)
+    if len(normalized_token) < 4:
+        return False
+
+    aliases = [category, *CATEGORY_SYNONYMS.get(category, ())]
+
+    for alias in aliases:
+        for alias_token in _normalize_text(alias).split():
+            if len(alias_token) < 4:
+                continue
+
+            if alias_token.startswith(normalized_token) or normalized_token.startswith(alias_token):
+                return True
+
+    return False
 
 
 def _matches_query_terms(benefit: dict[str, Any], search_terms: list[str]) -> bool:

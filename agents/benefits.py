@@ -96,13 +96,13 @@ def _should_show_categories_summary(filters: dict[str, Any]) -> bool:
 
 def _build_categories_answer() -> str:
     lines = [
-        "🎁 Tengo beneficios mockeados para estas categorías:",
+        "🎁 Tengo beneficios para estas categorías:",
         "",
     ]
 
     for category in list_benefit_categories():
         emoji = CATEGORY_EMOJIS.get(category, "🎁")
-        lines.append(f"• {emoji} {category}")
+        lines.append(f"{emoji} {category}")
 
     lines.extend(
         [
@@ -129,6 +129,7 @@ def _build_results_header(results: list[dict[str, Any]], filters: dict[str, Any]
     category = filters["category"]
     segment = get_benefits_segment()
     commerce_name = _unique_commerce_name(results)
+    inferred_category = _unique_category_name(results)
 
     if filters["only_eminent"] and category:
         return f"💎 Encontré estos beneficios de *{category}* para *{segment}*:"
@@ -163,6 +164,9 @@ def _build_results_header(results: list[dict[str, Any]], filters: dict[str, Any]
     if commerce_name:
         return f"🔎 Encontré estos beneficios en *{commerce_name}*:"
 
+    if inferred_category:
+        return f"🎁 Encontré estos beneficios de *{inferred_category}*:"
+
     if category:
         return f"🎁 Encontré estos beneficios de *{category}*:"
 
@@ -182,6 +186,19 @@ def _unique_commerce_name(results: list[dict[str, Any]]) -> str | None:
     return None
 
 
+def _unique_category_name(results: list[dict[str, Any]]) -> str | None:
+    categories = {
+        str(result.get("categoria") or "").strip()
+        for result in results
+        if str(result.get("categoria") or "").strip()
+    }
+
+    if len(categories) == 1:
+        return next(iter(categories))
+
+    return None
+
+
 def _format_benefit_block(benefit: dict[str, Any]) -> list[str]:
     category = str(benefit.get("categoria") or "").strip()
     emoji = CATEGORY_EMOJIS.get(category, "🎁")
@@ -189,7 +206,7 @@ def _format_benefit_block(benefit: dict[str, Any]) -> list[str]:
     benefit_text = str(benefit.get("beneficio") or "").strip()
 
     details = [
-        f"📅 {_format_days(benefit.get('dias'))}",
+        _format_days(benefit.get("dias")),
         f"💳 {_format_payment_methods(benefit.get('mediosDePago') or [])}",
     ]
 
@@ -207,7 +224,7 @@ def _format_benefit_block(benefit: dict[str, Any]) -> list[str]:
 
     return [
         f"{emoji} *{commerce}* — {benefit_text}",
-        " | ".join(details),
+        f"🔹 {' | '.join(details)}",
     ]
 
 
@@ -237,7 +254,7 @@ def _build_no_results_answer(filters: dict[str, Any]) -> str:
     qualifier = _describe_filters(filters)
 
     return (
-        f"🔎 No encontré beneficios mock para {qualifier}. "
+        f"🔎 No encontré beneficios para {qualifier}. "
         f"Si querés, podés consultar por categoría: {categories}."
     )
 
