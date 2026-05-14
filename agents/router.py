@@ -241,22 +241,30 @@ GENERAL_CHITCHAT_PATTERNS = (
 )
 
 CHITCHAT_CAPABILITIES_PATTERNS = (
+    "que sabes hacer",
     "que podes hacer",
     "que puedes hacer",
+    "en que me sabes ayudar",
     "en que me podes ayudar",
     "en que me puedes ayudar",
+    "como me sabes ayudar",
     "como me podes ayudar",
     "como me puedes ayudar",
     "ayuda",
+    "menu",
+    "opciones",
 )
 
 CHITCHAT_EXACT = {
     "hola",
+    "que tal",
     "buen dia",
     "buenos dias",
     "buenas",
     "buenas tardes",
     "buenas noches",
+    "hello",
+    "hi",
     "gracias",
     "muchas gracias",
     "mil gracias",
@@ -394,6 +402,35 @@ def _is_general_non_banking_request(normalized_question: str) -> bool:
     )
 
 
+def _is_capabilities_chitchat_request(normalized_question: str) -> bool:
+    if any(
+        _contains_normalized_term(normalized_question, pattern)
+        for pattern in CHITCHAT_CAPABILITIES_PATTERNS
+    ):
+        return True
+
+    tokens = normalized_question.split()
+    if not tokens:
+        return False
+
+    if any(token in {"ayuda", "menu", "opciones"} for token in tokens):
+        return True
+
+    if len(tokens) <= 5 and "hacer" in tokens and any(
+        token.startswith("pod") or token.startswith("sab")
+        for token in tokens
+    ):
+        return True
+
+    if any(token.startswith("ayud") for token in tokens) and any(
+        token in {"que", "como", "en"}
+        for token in tokens
+    ):
+        return True
+
+    return False
+
+
 def _is_chitchat_request(normalized_question: str) -> bool:
     if (
         _is_loans_request(normalized_question)
@@ -413,10 +450,10 @@ def _is_chitchat_request(normalized_question: str) -> bool:
     if normalized_question.startswith("hola") and len(normalized_question.split()) <= 4:
         return True
 
-    if any(
-        _contains_normalized_term(normalized_question, pattern)
-        for pattern in CHITCHAT_CAPABILITIES_PATTERNS
-    ):
+    if normalized_question.startswith("buenas") and len(normalized_question.split()) <= 4:
+        return True
+
+    if _is_capabilities_chitchat_request(normalized_question):
         return True
 
     return False
@@ -545,7 +582,7 @@ def router_node(
                             "Responde solamente una de estas palabras: "
                             "chitchat, loans_rag, bcra_credit_status, branch_locator, benefits, fallback, sensitive.\n\n"
                             "Definicion de chitchat: mensajes sociales, saludos, agradecimientos, "
-                            "despedidas, preguntas generales o temas no bancarios fuera del alcance del asistente.\n"
+                            "despedidas, preguntas sobre capacidades del bot, preguntas generales o temas no bancarios fuera del alcance del asistente.\n"
                             "Definicion de fallback: consultas bancarias o financieras que parecen "
                             "relevantes para Galicia pero que no estan cubiertas por los flujos disponibles.\n"
                             "Usa chitchat para saludos, agradecimientos, charla simple o temas no bancarios.\n"
@@ -563,6 +600,8 @@ def router_node(
                             "compartir claves, contrasenas, PIN, tokens, CVV o datos privados.\n"
                             "Usa fallback solo para consultas bancarias o financieras no soportadas.\n\n"
                             "Ejemplos:\n"
+                            "Usuario: que sabes hacer\n"
+                            "Intent: chitchat\n"
                             "Usuario: me podes ayudar a hacer una torta?\n"
                             "Intent: chitchat\n"
                             "Usuario: cuando juega Boca por Libertadores?\n"

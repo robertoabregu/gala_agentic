@@ -11,13 +11,17 @@ from observability.logger import log_step
 CHITCHAT_MODEL = os.getenv("OPENAI_MODEL_CHITCHAT", "gpt-4o-mini")
 
 CAPABILITIES_PATTERNS = {
+    "que sabes hacer",
     "que podes hacer",
     "que puedes hacer",
+    "en que me sabes ayudar",
     "en que me podes ayudar",
     "en que me puedes ayudar",
     "como me podes ayudar",
     "como me puedes ayudar",
     "ayuda",
+    "menu",
+    "opciones",
 }
 
 IDENTITY_PATTERNS = {"quien sos", "quien eres", "que sos"}
@@ -43,18 +47,10 @@ def _get_user_name(state: AgentState) -> str:
     return (memory.get("user_name") or memory.get("nombre") or "").strip()
 
 
-def _conversation_started(state: AgentState) -> bool:
-    memory = state.get("memory") or {}
-    return bool(
-        state.get("is_followup")
-        or memory.get("last_user_question")
-        or memory.get("last_assistant_answer")
-    )
-
-
 def _is_greeting(normalized_question: str) -> bool:
     greetings = {
         "hola",
+        "que tal",
         "buen dia",
         "buenos dias",
         "buenas",
@@ -77,59 +73,87 @@ def _is_greeting(normalized_question: str) -> bool:
 
 
 def _build_greeting_response(user_name: str = "") -> str:
-    name_part = f", *{user_name}*" if user_name else ""
-
-    return f"¡Hola{name_part}! Puedo ayudarte con consultas sobre *préstamos* y *beneficios*."
+    return (
+        "👋 Hola, ¿cómo estás? Soy Gala.\n\n"
+        "Podés escribirme lo que necesitás o elegir un tema y avanzamos.\n\n"
+        "Actualmente puedo ayudarte con:\n\n"
+        "💰 Consultas sobre préstamos\n"
+        "📊 Consulta de situación crediticia\n"
+        "📍 Búsqueda de sucursales cercanas\n"
+        "🎁 Búsqueda de beneficios"
+    )
 
 
 def _is_capabilities_request(normalized_question: str) -> bool:
-    return normalized_question in CAPABILITIES_PATTERNS
-
-
-def _should_greet(state: AgentState, normalized_question: str) -> bool:
-    if _is_greeting(normalized_question):
+    if normalized_question in CAPABILITIES_PATTERNS:
         return True
 
-    return not _conversation_started(state) and _is_capabilities_request(normalized_question)
+    tokens = normalized_question.split()
+    if not tokens:
+        return False
+
+    if any(token in {"ayuda", "menu", "opciones"} for token in tokens):
+        return True
+
+    if len(tokens) <= 5 and "hacer" in tokens and any(
+        token.startswith("pod") or token.startswith("sab")
+        for token in tokens
+    ):
+        return True
+
+    if any(token.startswith("ayud") for token in tokens) and any(
+        token in {"que", "como", "en"}
+        for token in tokens
+    ):
+        return True
+
+    return False
 
 
-def _build_capabilities_response(*, should_greet: bool, user_name: str = "") -> str:
-    if should_greet:
-        return _build_greeting_response(user_name)
-
-    return "Puedo ayudarte con consultas sobre *préstamos* y *beneficios*."
+def _build_capabilities_response(user_name: str = "") -> str:
+    return _build_greeting_response(user_name)
 
 
 def _fallback_chitchat_response(
     normalized_question: str,
     *,
-    should_greet: bool,
     user_name: str = "",
 ) -> str:
     name_part = f", {user_name}" if user_name else ""
 
     if normalized_question in THANKS_PATTERNS or "gracias" in normalized_question:
-        return "De nada. Cuando quieras, puedo ayudarte con préstamos o beneficios."
+        return (
+            "De nada. Cuando quieras, puedo ayudarte con préstamos, "
+            "situación crediticia, sucursales o beneficios."
+        )
 
     if normalized_question in IDENTITY_PATTERNS:
         return (
             "Soy Gala, el asistente virtual de Banco Galicia. "
-            "Puedo ayudarte con consultas sobre *préstamos* y *beneficios*."
+            "Puedo ayudarte con consultas sobre préstamos, situación crediticia, "
+            "sucursales cercanas y beneficios."
         )
 
     if _is_capabilities_request(normalized_question):
-        return _build_capabilities_response(should_greet=should_greet, user_name=user_name)
+        return _build_capabilities_response(user_name=user_name)
 
     if normalized_question in STATUS_PATTERNS:
         return (
             f"Muy bien{name_part}, gracias. "
-            "Puedo ayudarte con consultas sobre *préstamos* y *beneficios*."
+            "Puedo ayudarte con consultas sobre préstamos, situación crediticia, "
+            "sucursales cercanas y beneficios."
         )
 
     if normalized_question in FAREWELL_PATTERNS:
-        return "Hasta luego. Cuando quieras, puedo ayudarte con préstamos o beneficios."
+        return (
+            "Hasta luego. Cuando quieras, puedo ayudarte con préstamos, "
+            "situación crediticia, sucursales o beneficios."
+        )
 
-    return "No puedo ayudarte con eso, pero sí puedo darte una mano con consultas sobre préstamos o beneficios."
+    return (
+        "No puedo ayudarte con eso, pero sí puedo darte una mano con consultas sobre "
+        "préstamos, situación crediticia, sucursales o beneficios."
+    )
 
 
 def _strip_leading_greeting(answer: str) -> str:
@@ -146,7 +170,6 @@ def chitchat_node(state: AgentState) -> AgentState:
     question = state.get("question", "")
     normalized_question = _normalize_text(question)
     user_name = _get_user_name(state)
-    should_greet = _should_greet(state, normalized_question)
 
     if _is_greeting(normalized_question):
         answer = _build_greeting_response(user_name)
@@ -162,6 +185,20 @@ def chitchat_node(state: AgentState) -> AgentState:
             "error": None,
         }
 
+    if _is_capabilities_request(normalized_question):
+        answer = _build_capabilities_response(user_name=user_name)
+
+        log_step("CHITCHAT", "Menu de capacidades generado", {
+            "has_user_name": bool(user_name),
+        })
+
+        return {
+            **state,
+            "answer": answer,
+            "topic": "capacidades",
+            "error": None,
+        }
+
     llm = ChatOpenAI(
         model=CHITCHAT_MODEL,
         temperature=0.5,
@@ -170,7 +207,7 @@ def chitchat_node(state: AgentState) -> AgentState:
     system_prompt = """
 Sos Gala, el asistente virtual de Banco Galicia.
 
-Respondés mensajes conversacionales breves, como saludos, agradecimientos,
+Respondés mensajes conversacionales breves, como agradecimientos,
 despedidas, preguntas casuales o comentarios simples.
 
 Tono:
@@ -188,19 +225,17 @@ Reglas:
 - Si el usuario hace charla casual fuera del alcance bancario, respondé amable pero NO continúes el tema.
 - No hagas preguntas para seguir conversaciones casuales.
 - No opines sobre fútbol, política, famosos, noticias, clima u otros temas fuera del alcance.
-- Redirigí suavemente hacia consultas sobre préstamos o beneficios cuando corresponda.
+- Redirigí suavemente hacia consultas sobre préstamos, situación crediticia, sucursales o beneficios cuando corresponda.
 - Si el mensaje es un tema no bancario fuera de alcance, una respuesta válida es:
-  "No puedo ayudarte con eso, pero sí puedo darte una mano con consultas sobre préstamos o beneficios."
-- Si el usuario solo saluda, saludá y ofrecé ayuda bancaria de forma natural.
+  "No puedo ayudarte con eso, pero sí puedo darte una mano con consultas sobre préstamos, situación crediticia, sucursales o beneficios."
+- Si el usuario pregunta quién sos, explicá que sos Gala y mencioná brevemente en qué podés ayudar.
 - Si agradece, respondé de forma breve y cálida.
 - Si se despide, despedite de forma breve y amable.
-- Si pregunta quién sos, explicá que sos Gala y mencioná brevemente en qué podés ayudar.
-- Solo saludá si es el primer turno o si el usuario saludó explícitamente.
-- Si la conversación ya está empezada y el usuario no saludó, no empieces con "Hola", "Buenas" ni similares.
+- No empieces con "Hola", "Buenas" ni similares salvo que el usuario haya saludado explícitamente.
 - Nunca cierres una respuesta casual con preguntas como “¿Te gusta Boca?”, “¿Querés hablar de eso?” o similares.
-- Si se informa un nombre del usuario, podés usarlo naturalmente en saludos o despedidas.
+- Si se informa un nombre del usuario, podés usarlo naturalmente en respuestas puntuales.
 - No uses el nombre del usuario en todas las respuestas.
-- Actualmente podés ayudar con préstamos y beneficios.
+- Actualmente podés ayudar con préstamos, situación crediticia, búsqueda de sucursales cercanas y beneficios.
 """.strip()
 
     user_context = ""
@@ -209,8 +244,6 @@ Reglas:
 
     user_prompt = f"""
 {user_context}
-Saludo habilitado: {"si" if should_greet else "no"}
-
 Mensaje del usuario:
 {question}
 """.strip()
@@ -223,13 +256,10 @@ Mensaje del usuario:
             ]
         )
 
-        answer = response.content.strip()
-        if not should_greet:
-            answer = _strip_leading_greeting(answer)
+        answer = _strip_leading_greeting(response.content.strip())
         if not answer:
             answer = _fallback_chitchat_response(
                 normalized_question,
-                should_greet=should_greet,
                 user_name=user_name,
             )
 
@@ -240,7 +270,6 @@ Mensaje del usuario:
 
         answer = _fallback_chitchat_response(
             normalized_question,
-            should_greet=should_greet,
             user_name=user_name,
         )
 
