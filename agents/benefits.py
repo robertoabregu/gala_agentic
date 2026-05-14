@@ -7,7 +7,7 @@ from typing import Any
 from agents.state import AgentState
 from core.privacy import mask_sensitive_text
 from observability.logger import log_step
-from tools.benefits_mock import (
+from tools.benefits_api import (
     get_benefits_segment,
     infer_benefits_filters,
     list_benefit_categories,
@@ -87,7 +87,7 @@ def benefits_node(state: AgentState) -> AgentState:
     return {
         **state,
         "route": "benefits",
-        "tool_name": "benefits_mock",
+        "tool_name": "benefits_api",
         "tool_input": {
             "question": question,
             "standalone_question": standalone_question,
