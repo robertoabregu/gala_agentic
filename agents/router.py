@@ -241,10 +241,14 @@ GENERAL_CHITCHAT_PATTERNS = (
 )
 
 CHITCHAT_CAPABILITIES_PATTERNS = (
+    "que sabes hacer",
     "que podes hacer",
     "que puedes hacer",
+    "en que me sabes ayudar",
     "en que me podes ayudar",
     "en que me puedes ayudar",
+    "menu",
+    "opciones",
     "como me podes ayudar",
     "como me puedes ayudar",
     "ayuda",
@@ -252,6 +256,7 @@ CHITCHAT_CAPABILITIES_PATTERNS = (
 
 CHITCHAT_EXACT = {
     "hola",
+    "que tal",
     "buen dia",
     "buenos dias",
     "buenas",
@@ -394,6 +399,35 @@ def _is_general_non_banking_request(normalized_question: str) -> bool:
     )
 
 
+def _is_capabilities_chitchat_request(normalized_question: str) -> bool:
+    if any(
+        _contains_normalized_term(normalized_question, pattern)
+        for pattern in CHITCHAT_CAPABILITIES_PATTERNS
+    ):
+        return True
+
+    tokens = normalized_question.split()
+    if not tokens:
+        return False
+
+    if any(token in {"ayuda", "menu", "opciones"} for token in tokens):
+        return True
+
+    if len(tokens) <= 5 and "hacer" in tokens and any(
+        token.startswith("pod") or token.startswith("sab")
+        for token in tokens
+    ):
+        return True
+
+    if any(token.startswith("ayud") for token in tokens) and any(
+        token in {"que", "qu", "como", "en"}
+        for token in tokens
+    ):
+        return True
+
+    return False
+
+
 def _is_chitchat_request(normalized_question: str) -> bool:
     if (
         _is_loans_request(normalized_question)
@@ -413,10 +447,7 @@ def _is_chitchat_request(normalized_question: str) -> bool:
     if normalized_question.startswith("hola") and len(normalized_question.split()) <= 4:
         return True
 
-    if any(
-        _contains_normalized_term(normalized_question, pattern)
-        for pattern in CHITCHAT_CAPABILITIES_PATTERNS
-    ):
+    if _is_capabilities_chitchat_request(normalized_question):
         return True
 
     return False
