@@ -12,6 +12,7 @@ TOPIC_BY_ROUTE = {
     "rag": "prestamos",
     "bcra_credit_status": "situacion_crediticia_bcra",
     "branch_locator": "sucursales_cercanas",
+    "benefits": "beneficios",
     "chitchat": "conversacion",
     "fallback": "fallback",
 }

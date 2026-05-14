@@ -9,6 +9,7 @@ from agents.query_rewriter import query_rewriter_node
 from agents.retriever_node import retriever_node
 from agents.answer import answer_node
 from agents.bcra_agent import bcra_agent_node
+from agents.benefits import benefits_node
 from agents.branch_locator_tool import branch_locator_node
 from agents.guardrail import guardrail_node
 from agents.save_memory import save_memory_node
@@ -67,6 +68,9 @@ def build_graph(client, retriever, top_k, score_threshold, chat_model):
     def branch_locator_wrapper(state: AgentState):
         return branch_locator_node(state=state)
 
+    def benefits_wrapper(state: AgentState):
+        return benefits_node(state=state)
+
     graph.add_node("contextualizer", contextualizer_wrapper)
     graph.add_node("router", router_wrapper)
     graph.add_node("chitchat_answer", chitchat_wrapper)
@@ -74,6 +78,7 @@ def build_graph(client, retriever, top_k, score_threshold, chat_model):
     graph.add_node("retriever", retriever_wrapper)
     graph.add_node("answer", answer_wrapper)
     graph.add_node("bcra_agent", bcra_agent_wrapper)
+    graph.add_node("benefits", benefits_wrapper)
     graph.add_node("branch_locator", branch_locator_wrapper)
     graph.add_node("guardrail", guardrail_node)
     graph.add_node("save_memory", save_memory_node)
@@ -89,6 +94,7 @@ def build_graph(client, retriever, top_k, score_threshold, chat_model):
             "rag": "query_rewriter",
             "loans_rag": "query_rewriter",
             "bcra_credit_status": "bcra_agent",
+            "benefits": "benefits",
             "branch_locator": "branch_locator",
             "fallback": "guardrail",
             "sensitive": "guardrail",
@@ -100,6 +106,7 @@ def build_graph(client, retriever, top_k, score_threshold, chat_model):
     graph.add_edge("retriever", "answer")
     graph.add_edge("answer", "guardrail")
     graph.add_edge("bcra_agent", "guardrail")
+    graph.add_edge("benefits", "guardrail")
     graph.add_edge("branch_locator", "guardrail")
     graph.add_edge("guardrail", "save_memory")
     graph.add_edge("save_memory", END)

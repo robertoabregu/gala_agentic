@@ -13,6 +13,7 @@ VALID_ROUTES = {
     "loans_rag",
     "bcra_credit_status",
     "branch_locator",
+    "benefits",
     "fallback",
     "sensitive",
 }
@@ -119,6 +120,33 @@ LOANS_PATTERNS = (
     "adelanto",
 )
 
+BENEFITS_PATTERNS = (
+    "beneficio",
+    "beneficios",
+    "promo",
+    "promos",
+    "promocion",
+    "promociones",
+    "descuento",
+    "descuentos",
+    "ahorro",
+    "oferta",
+    "ofertas",
+    "eminent",
+    "eminent black",
+    "seleccion exclusiva",
+    "gastronomia",
+    "supermercados",
+    "supermercado",
+    "super",
+    "indumentaria",
+    "ropa",
+    "electronica",
+    "tecnologia",
+    "hogar",
+    "casa",
+)
+
 CHITCHAT_EXACT = {
     "hola",
     "buen dia",
@@ -151,6 +179,10 @@ def _normalize_route(route: str) -> str:
     if normalized == "rag":
         return "loans_rag"
     return normalized
+
+
+def _contains_normalized_term(text: str, term: str) -> bool:
+    return f" {term} " in f" {text} "
 
 
 def _is_sensitive_request(normalized_question: str) -> bool:
@@ -224,11 +256,22 @@ def _is_loans_request(normalized_question: str) -> bool:
     return any(pattern in normalized_question for pattern in LOANS_PATTERNS)
 
 
+def _is_benefits_request(normalized_question: str) -> bool:
+    if "caja de ahorro" in normalized_question:
+        return False
+
+    return any(
+        _contains_normalized_term(normalized_question, pattern)
+        for pattern in BENEFITS_PATTERNS
+    )
+
+
 def _is_chitchat_request(normalized_question: str) -> bool:
     if (
         _is_loans_request(normalized_question)
         or _is_bcra_request(normalized_question)
         or _is_branch_locator_request(normalized_question)
+        or _is_benefits_request(normalized_question)
     ):
         return False
 
@@ -345,6 +388,8 @@ def router_node(
         route = "bcra_credit_status"
     elif _is_loans_request(normalized_question):
         route = "loans_rag"
+    elif _is_benefits_request(normalized_question):
+        route = "benefits"
     elif _is_chitchat_request(normalized_question):
         route = "chitchat"
     else:
@@ -359,7 +404,7 @@ def router_node(
                             "Sos un clasificador de intencion para un chatbot bancario. "
                             "Tu unica tarea es decidir la ruta correcta. "
                             "Responde solamente una de estas palabras: "
-                            "chitchat, loans_rag, bcra_credit_status, branch_locator, fallback, sensitive.\n\n"
+                            "chitchat, loans_rag, bcra_credit_status, branch_locator, benefits, fallback, sensitive.\n\n"
                             "Usa chitchat para saludos, agradecimientos o charla simple.\n"
                             "Usa loans_rag para consultas sobre prestamos, adelanto de sueldo, "
                             "cuotas, precancelacion, prestamos hipotecarios o prendarios.\n"
@@ -367,6 +412,9 @@ def router_node(
                             "crediticia, Central de Deudores, BCRA o deudas bancarias.\n"
                             "Usa branch_locator cuando el usuario quiera buscar sucursales "
                             "Galicia cercanas a su ubicacion actual.\n"
+                            "Usa benefits cuando el usuario pregunte por beneficios, promociones, "
+                            "descuentos, ofertas, categorias de beneficios o beneficios del "
+                            "segmento Eminent o Eminent Black.\n"
                             "Usa sensitive si el usuario pide revelar, mostrar, recuperar o "
                             "compartir claves, contrasenas, PIN, tokens, CVV o datos privados.\n"
                             "Usa fallback si la consulta no encaja en ninguna ruta anterior."
