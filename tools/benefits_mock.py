@@ -120,58 +120,128 @@ NFC_PATTERNS = ("nfc", "pago nfc", "contactless")
 TODAY_PATTERNS = ("hoy", "para hoy")
 EVERY_DAY_PATTERNS = ("todos los dias", "todos los días")
 
-IGNORED_QUERY_TOKENS = {
+BENEFITS_STOPWORDS = {
+    "alguna",
+    "algunas",
+    "alguno",
+    "algunos",
+    "beneficio",
+    "beneficios",
+    "busca",
+    "buscar",
+    "categoria",
+    "categoría",
+    "consulta",
+    "consultar",
+    "con",
+    "contame",
+    "dame",
+    "de",
+    "decime",
+    "del",
+    "descuento",
+    "descuentos",
+    "disponible",
+    "disponibles",
+    "el",
+    "en",
+    "hay",
+    "la",
+    "las",
+    "los",
+    "me",
+    "mi",
+    "mis",
+    "mostrar",
+    "mostrame",
+    "mostrames",
+    "mostrarlos",
+    "oferta",
+    "ofertas",
+    "para",
+    "por",
+    "promo",
+    "promocion",
+    "promociones",
+    "promos",
+    "promoción",
+    "promociones",
+    "que",
+    "qué",
+    "quiero",
+    "quisiera",
+    "rubro",
+    "sin",
+    "sobre",
+    "tenes",
+    "tenés",
+    "tengo",
+    "tienen",
+    "un",
+    "una",
+    "unos",
+    "unas",
+    "ver",
+}
+
+GENERIC_QUERY_TOKENS = {
     "a",
     "al",
     "algo",
     "algun",
+    "alguna",
+    "algunas",
     "alguno",
+    "algunos",
+    "banco",
+    "black",
     "beneficio",
     "beneficios",
-    "black",
-    "banco",
-    "cafe",
-    "casa",
+    "busca",
+    "buscar",
     "categoria",
     "categorias",
-    "comida",
     "comun",
     "comunes",
-    "compra",
-    "compras",
     "con",
+    "consulta",
+    "consultar",
+    "contame",
     "cual",
     "cuales",
+    "dame",
     "de",
+    "decime",
     "del",
     "descuento",
     "descuentos",
     "dia",
     "dias",
+    "disponible",
+    "disponibles",
     "el",
     "eminent",
     "en",
-    "esos",
     "esas",
+    "esos",
     "exclusiva",
     "exclusivas",
     "exclusivo",
     "exclusivos",
     "favor",
     "hay",
-    "hogar",
     "hoy",
     "la",
     "las",
     "lo",
     "los",
     "me",
-    "mercado",
     "mi",
     "mis",
-    "mostrame",
     "mostrar",
-    "muebles",
+    "mostrame",
+    "mostrames",
+    "mostrarlos",
     "nfc",
     "no",
     "oferta",
@@ -184,25 +254,35 @@ IGNORED_QUERY_TOKENS = {
     "promocion",
     "promociones",
     "promos",
+    "promocion",
+    "promociones",
+    "promocion",
     "qr",
     "que",
     "quiero",
+    "quisiera",
+    "rubro",
     "sea",
     "sean",
     "seleccion",
     "ser",
     "si",
+    "sin",
     "solo",
+    "sobre",
     "sus",
-    "tengo",
     "tenemos",
     "tenes",
+    "tengo",
     "tenés",
     "tienen",
     "todos",
     "todas",
     "un",
     "una",
+    "unos",
+    "unas",
+    "ver",
     "vigente",
     "vigentes",
     "y",
@@ -222,14 +302,29 @@ def _normalize_text(text: str | None) -> str:
     return lowered.strip()
 
 
+NORMALIZED_BENEFITS_STOPWORDS = {
+    _normalize_text(word)
+    for word in BENEFITS_STOPWORDS
+    if _normalize_text(word)
+}
+
+NORMALIZED_GENERIC_QUERY_TOKENS = {
+    _normalize_text(word)
+    for word in GENERIC_QUERY_TOKENS
+    if _normalize_text(word)
+}
+
 for aliases in CATEGORY_SYNONYMS.values():
     for alias in aliases:
-        for token in _normalize_text(alias).split():
-            if token:
-                IGNORED_QUERY_TOKENS.add(token)
+        normalized_alias = _normalize_text(alias)
+        if not normalized_alias:
+            continue
+        NORMALIZED_GENERIC_QUERY_TOKENS.add(normalized_alias)
+        for token in normalized_alias.split():
+            NORMALIZED_GENERIC_QUERY_TOKENS.add(token)
 
 for day_name in DAYS_ORDER:
-    IGNORED_QUERY_TOKENS.add(day_name)
+    NORMALIZED_GENERIC_QUERY_TOKENS.add(day_name)
 
 
 def _contains_term(text: str, term: str) -> bool:
@@ -283,6 +378,13 @@ def infer_benefits_filters(text: str | None) -> dict[str, Any]:
     category = resolve_benefit_category(normalized)
     exclude_eminent = _has_exclude_eminent_intent(normalized)
     only_eminent = _has_only_eminent_intent(normalized) and not exclude_eminent
+    merchant_names = _detect_merchants(normalized, category=category)
+    search_terms = _build_search_terms(
+        normalized,
+        category=category,
+        merchant_names=merchant_names,
+    )
+    cleaned_query = " ".join(search_terms).strip()
 
     return {
         "category": category,
@@ -292,7 +394,10 @@ def infer_benefits_filters(text: str | None) -> dict[str, Any]:
         "only_nfc": any(_contains_term(normalized, pattern) for pattern in NFC_PATTERNS),
         "today_only": any(_contains_term(normalized, pattern) for pattern in TODAY_PATTERNS),
         "every_day_only": any(_contains_term(normalized, pattern) for pattern in EVERY_DAY_PATTERNS),
-        "search_terms": _extract_search_terms(normalized, category=category),
+        "raw_query": text or "",
+        "cleaned_query": cleaned_query,
+        "search_terms": search_terms,
+        "merchant_names": merchant_names,
     }
 
 
@@ -307,10 +412,15 @@ def search_benefits(
     only_nfc: bool = False,
     today_only: bool = False,
     every_day_only: bool = False,
+    search_terms: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     inferred_filters = infer_benefits_filters(query)
     canonical_category = resolve_benefit_category(category) or inferred_filters["category"]
-    search_terms = inferred_filters["search_terms"]
+    normalized_search_terms = [
+        _normalize_text(term)
+        for term in (search_terms if search_terms is not None else inferred_filters["search_terms"])
+        if _normalize_text(term)
+    ]
     should_exclude_eminent = exclude_eminent or inferred_filters["exclude_eminent"]
     should_only_eminent = only_eminent and not should_exclude_eminent
     day_filter = _today_day_name() if today_only else None
@@ -339,7 +449,7 @@ def search_benefits(
         if day_filter and not _matches_day(benefit.get("dias"), day_filter):
             continue
 
-        if search_terms and not _matches_query_terms(benefit, search_terms):
+        if normalized_search_terms and not _matches_query_terms(benefit, normalized_search_terms):
             continue
 
         results.append(benefit)
@@ -378,34 +488,92 @@ def _iter_benefits() -> list[dict[str, Any]]:
     return items
 
 
-def _extract_search_terms(text: str, *, category: str | None = None) -> list[str]:
-    cleaned_text = _strip_category_terms(text, category)
+@lru_cache(maxsize=1)
+def _merchant_index() -> list[dict[str, Any]]:
+    merchants: dict[str, dict[str, Any]] = {}
 
+    for benefit in _iter_benefits():
+        merchant_name = str(benefit.get("comercio") or "").strip()
+        normalized_name = _normalize_text(merchant_name)
+        if not merchant_name or not normalized_name:
+            continue
+
+        entry = merchants.setdefault(
+            normalized_name,
+            {
+                "name": merchant_name,
+                "normalized_name": normalized_name,
+                "categories": set(),
+                "aliases": set(),
+            },
+        )
+        entry["categories"].add(benefit["categoria"])
+        entry["aliases"].add(normalized_name)
+
+        for token in normalized_name.split():
+            if len(token) >= 5 and token not in NORMALIZED_GENERIC_QUERY_TOKENS:
+                entry["aliases"].add(token)
+
+    indexed_merchants: list[dict[str, Any]] = []
+    for entry in merchants.values():
+        indexed_merchants.append(
+            {
+                "name": entry["name"],
+                "normalized_name": entry["normalized_name"],
+                "categories": tuple(sorted(entry["categories"])),
+                "aliases": tuple(sorted(entry["aliases"], key=lambda alias: (-len(alias), alias))),
+            }
+        )
+
+    return sorted(
+        indexed_merchants,
+        key=lambda item: (-len(item["normalized_name"]), item["normalized_name"]),
+    )
+
+
+def _detect_merchants(text: str, *, category: str | None = None) -> list[str]:
+    normalized_text = _normalize_text(text)
+    if not normalized_text:
+        return []
+
+    matches: list[str] = []
+
+    for merchant in _merchant_index():
+        if category and category not in merchant["categories"]:
+            continue
+
+        if any(_contains_term(normalized_text, alias) for alias in merchant["aliases"]):
+            matches.append(merchant["name"])
+
+    if not matches:
+        return []
+
+    return [matches[0]]
+
+
+def _build_search_terms(
+    text: str,
+    *,
+    category: str | None,
+    merchant_names: list[str],
+) -> list[str]:
+    if merchant_names:
+        primary_merchant = merchant_names[0]
+        return [_normalize_text(primary_merchant)]
+
+    if category:
+        return []
+
+    return _extract_free_text_terms(text)
+
+
+def _extract_free_text_terms(text: str) -> list[str]:
+    cleaned_text = _normalize_text(text)
     return [
         token
         for token in cleaned_text.split()
-        if len(token) >= 3
-        and token not in IGNORED_QUERY_TOKENS
-        and not _token_is_category_related(token, category)
+        if len(token) >= 3 and token not in NORMALIZED_GENERIC_QUERY_TOKENS
     ]
-
-
-def _strip_category_terms(text: str, category: str | None) -> str:
-    cleaned_text = f" {_normalize_text(text)} "
-    aliases: list[str] = []
-
-    if category:
-        aliases.append(category)
-        aliases.extend(CATEGORY_SYNONYMS.get(category, ()))
-
-    for alias in aliases:
-        normalized_alias = _normalize_text(alias)
-        if not normalized_alias:
-            continue
-        cleaned_text = cleaned_text.replace(f" {normalized_alias} ", " ")
-
-    cleaned_text = re.sub(r"\s+", " ", cleaned_text)
-    return cleaned_text.strip()
 
 
 def _text_matches_category(text: str, category: str) -> bool:
@@ -428,35 +596,14 @@ def _text_matches_alias(text: str, alias: str) -> bool:
     text_tokens = normalized_text.split()
 
     for alias_token in alias_tokens:
-        if len(alias_token) < 5 or alias_token in IGNORED_QUERY_TOKENS:
+        if len(alias_token) < 5 or alias_token in NORMALIZED_GENERIC_QUERY_TOKENS:
             continue
 
         for text_token in text_tokens:
-            if len(text_token) < 5 or text_token in IGNORED_QUERY_TOKENS:
+            if len(text_token) < 5 or text_token in NORMALIZED_GENERIC_QUERY_TOKENS:
                 continue
 
             if alias_token.startswith(text_token) or text_token.startswith(alias_token):
-                return True
-
-    return False
-
-
-def _token_is_category_related(token: str, category: str | None) -> bool:
-    if not category:
-        return False
-
-    normalized_token = _normalize_text(token)
-    if len(normalized_token) < 4:
-        return False
-
-    aliases = [category, *CATEGORY_SYNONYMS.get(category, ())]
-
-    for alias in aliases:
-        for alias_token in _normalize_text(alias).split():
-            if len(alias_token) < 4:
-                continue
-
-            if alias_token.startswith(normalized_token) or normalized_token.startswith(alias_token):
                 return True
 
     return False

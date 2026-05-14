@@ -50,13 +50,14 @@ def benefits_node(state: AgentState) -> AgentState:
     else:
         results = search_benefits(
             category=filters["category"],
-            query=filters["query"],
+            query=filters["cleaned_query"],
             only_eminent=filters["only_eminent"],
             exclude_eminent=filters["exclude_eminent"],
             only_qr=filters["only_qr"],
             only_nfc=filters["only_nfc"],
             today_only=filters["today_only"],
             every_day_only=filters["every_day_only"],
+            search_terms=filters["search_terms"],
             limit=5,
         )
 
@@ -72,10 +73,14 @@ def benefits_node(state: AgentState) -> AgentState:
             "question": mask_sensitive_text(question),
             "standalone_question": mask_sensitive_text(standalone_question),
             "category": filters["category"],
-            "query": mask_sensitive_text(filters["query"]),
+            "raw_query": mask_sensitive_text(filters["raw_query"]),
+            "cleaned_query": mask_sensitive_text(filters["cleaned_query"]),
+            "search_terms": filters["search_terms"],
             "only_eminent": filters["only_eminent"],
             "exclude_eminent": filters["exclude_eminent"],
-            "results": len(results),
+            "only_qr": filters["only_qr"],
+            "only_nfc": filters["only_nfc"],
+            "results_count": len(results),
         },
     )
 
@@ -111,26 +116,39 @@ def _resolve_benefits_filters(
     standalone_filters = infer_benefits_filters(standalone_question)
 
     category = current_filters["category"]
-    if not category and _can_use_standalone_category(question, current_filters, is_followup):
+    if not category and _can_use_standalone_context(question, current_filters, is_followup):
         category = standalone_filters["category"]
 
     exclude_eminent = bool(current_filters["exclude_eminent"])
     only_eminent = bool(current_filters["only_eminent"]) and not exclude_eminent
 
+    cleaned_query = current_filters["cleaned_query"]
+    search_terms = list(current_filters["search_terms"])
+    raw_query = question
+
+    if (
+        not category
+        and not search_terms
+        and _can_use_standalone_context(question, current_filters, is_followup)
+    ):
+        cleaned_query = standalone_filters["cleaned_query"]
+        search_terms = list(standalone_filters["search_terms"])
+
     return {
         "category": category,
-        "query": question,
+        "raw_query": raw_query,
+        "cleaned_query": cleaned_query,
+        "search_terms": search_terms,
         "only_eminent": only_eminent,
         "exclude_eminent": exclude_eminent,
         "only_qr": current_filters["only_qr"],
         "only_nfc": current_filters["only_nfc"],
         "today_only": current_filters["today_only"],
         "every_day_only": current_filters["every_day_only"],
-        "search_terms": current_filters["search_terms"],
     }
 
 
-def _can_use_standalone_category(
+def _can_use_standalone_context(
     question: str,
     current_filters: dict[str, Any],
     is_followup: bool,
