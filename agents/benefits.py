@@ -19,8 +19,18 @@ CATEGORY_EMOJIS = {
     "Supermercados": "🛒",
     "Gastronomía": "🍽️",
     "Indumentaria": "👕",
-    "Electrónica": "📱",
+    "Electrónica": "💻",
     "Hogar": "🏠",
+    "Vehículos": "🚗",
+    "Salud y Bienestar": "💚",
+    "Viajes": "✈️",
+    "Entretenimiento": "🎟️",
+    "Librerías": "📚",
+    "Shopping": "🛍️",
+    "Mascotas": "🐾",
+    "Juguetes": "🧸",
+    "Transportes": "🚌",
+    "Otros": "🎁",
 }
 
 REFERENCE_FOLLOWUP_PATTERNS = (
@@ -38,36 +48,71 @@ REFERENCE_FOLLOWUP_PATTERNS = (
 def benefits_node(state: AgentState) -> AgentState:
     question = (state.get("question") or "").strip()
     standalone_question = (state.get("standalone_question") or question).strip()
-    filters = _resolve_benefits_filters(
-        question=question,
-        standalone_question=standalone_question,
-        is_followup=bool(state.get("is_followup")),
-    )
 
-    if _should_show_categories_summary(filters):
-        answer = _build_categories_answer()
-        results: list[dict[str, Any]] = []
-    else:
-        results = search_benefits(
-            category=filters["category"],
-            query=filters["cleaned_query"],
-            only_eminent=filters["only_eminent"],
-            exclude_eminent=filters["exclude_eminent"],
-            only_qr=filters["only_qr"],
-            only_nfc=filters["only_nfc"],
-            today_only=filters["today_only"],
-            every_day_only=filters["every_day_only"],
-            installments=filters["installments"],
-            has_installments=filters["has_installments"],
-            interest_free=filters["interest_free"],
-            search_terms=filters["search_terms"],
-            limit=5,
+    try:
+        filters = _resolve_benefits_filters(
+            question=question,
+            standalone_question=standalone_question,
+            is_followup=bool(state.get("is_followup")),
         )
 
-        if results:
-            answer = _build_results_answer(results, filters)
+        if _should_show_categories_summary(filters):
+            answer = _build_categories_answer()
+            results: list[dict[str, Any]] = []
         else:
-            answer = _build_no_results_answer(filters)
+            results = search_benefits(
+                category=filters["category"],
+                query=filters["cleaned_query"],
+                raw_query=question,
+                only_eminent=filters["only_eminent"],
+                exclude_eminent=filters["exclude_eminent"],
+                only_qr=filters["only_qr"],
+                only_nfc=filters["only_nfc"],
+                today_only=filters["today_only"],
+                every_day_only=filters["every_day_only"],
+                installments=filters["installments"],
+                has_installments=filters["has_installments"],
+                interest_free=filters["interest_free"],
+                search_terms=filters["search_terms"],
+                limit=5,
+            )
+
+            if results:
+                answer = _build_results_answer(results, filters)
+            else:
+                answer = _build_no_results_answer(filters)
+    except Exception as exc:
+        log_step(
+            "BENEFITS",
+            "Error consultando beneficios",
+            {
+                "question": mask_sensitive_text(question),
+                "standalone_question": mask_sensitive_text(standalone_question),
+                "error": str(exc),
+            },
+        )
+        return {
+            **state,
+            "route": "benefits",
+            "tool_name": "benefits_api",
+            "tool_input": {
+                "question": question,
+                "standalone_question": standalone_question,
+            },
+            "tool_output": {
+                "results_count": 0,
+                "results": [],
+            },
+            "needs_clarification": False,
+            "missing_fields": [],
+            "pending_route": "",
+            "answer": (
+                "🔎 No pude consultar las promociones de Galicia en este momento. "
+                "Si querés, probá de nuevo en un ratito."
+            ),
+            "topic": "beneficios",
+            "error": str(exc),
+        }
 
     log_step(
         "BENEFITS",
@@ -224,7 +269,7 @@ def _build_categories_answer() -> str:
     lines.extend(
         [
             "",
-            "Podés pedirme, por ejemplo: *promos de gastronomía* o *beneficios exclusivos Eminent*.",
+            "Podés pedirme, por ejemplo: *promos de gastronomía*, *beneficios en Frávega* o *beneficios exclusivos Eminent*.",
         ]
     )
 
@@ -300,10 +345,10 @@ def _build_results_header(results: list[dict[str, Any]], filters: dict[str, Any]
         return "💳 Encontré estas promociones en *cuotas*:"
 
     if filters["today_only"] and category:
-        return f"📅 Encontré estos beneficios de *{category}* disponibles *hoy*:"
+        return f"🗓️ Encontré estos beneficios de *{category}* disponibles *hoy*:"
 
     if filters["today_only"]:
-        return "📅 Encontré estos beneficios disponibles *hoy*:"
+        return "🗓️ Encontré estos beneficios disponibles *hoy*:"
 
     if filters["every_day_only"] and category:
         return f"✅ Encontré estos beneficios de *{category}* para usar *todos los días*:"
@@ -389,8 +434,8 @@ def _format_payment_methods(methods: list[str]) -> str:
     if not clean_methods:
         return "Medios no informados"
 
-    normalized = {method.lower() for method in clean_methods}
-    if normalized == {"credito", "debito"} or normalized == {"crédito", "débito"}:
+    normalized = {_normalize_text(method) for method in clean_methods}
+    if normalized == {"credito", "debito"}:
         return "Crédito y débito"
 
     if len(clean_methods) == 1:
@@ -435,7 +480,10 @@ def _build_no_results_answer(filters: dict[str, Any]) -> str:
         return "🔎 No encontré promociones con pago QR en las promociones disponibles ahora."
 
     if filters["category"]:
-        return f"🔎 No encontré beneficios para {filters['category']} en las promociones disponibles ahora."
+        return (
+            f"🔎 No encontré beneficios para {filters['category']} en las promociones disponibles ahora. "
+            "Si querés, también puedo buscar por un comercio puntual, por ejemplo *Frávega* o *Rappi*."
+        )
 
     if filters["today_only"]:
         return "🔎 No encontré beneficios disponibles hoy en las promociones disponibles ahora."
