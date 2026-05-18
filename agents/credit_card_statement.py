@@ -35,6 +35,8 @@ from tools.credit_card_statement_queries import (
 TOPIC = "resumen_tarjeta"
 TOOL_NAME = "credit_card_statement"
 MAX_LIST_ITEMS = 12
+PRIMARY_BULLET = "🔹"
+SECONDARY_BULLET = "🔸"
 
 SUPPORTED_ACTIONS = {
     "initial_summary",
@@ -371,36 +373,36 @@ def _format_initial_summary(statement: dict[str, Any]) -> str:
     metadata = statement.get("metadata") or {}
 
     lines = [
-        "📄 Analicé tu resumen de tarjeta.",
+        "📄 *Analicé tu resumen de tarjeta.*",
         "",
-        "*Total a pagar:*",
-        f"• Pesos: {_format_amount(summary.get('total_pesos'), 'ARS')}",
-        f"• Dólares: {_format_amount(summary.get('total_dolares'), 'USD')}",
+        "💳 *Total a pagar:*",
+        f"{PRIMARY_BULLET} *Pesos:* {_format_amount(summary.get('total_pesos'), 'ARS')}",
+        f"{SECONDARY_BULLET} *Dólares:* {_format_amount(summary.get('total_dolares'), 'USD')}",
     ]
 
     pago_minimo = summary.get("pago_minimo")
     if pago_minimo is not None:
-        lines.append(f"• Pago mínimo: {_format_amount(pago_minimo, 'ARS')}")
+        lines.append(f"{PRIMARY_BULLET} *Pago mínimo:* {_format_amount(pago_minimo, 'ARS')}")
 
     lines.extend(
         [
             "",
-            "*Fechas importantes:*",
-            f"• Vencimiento: {_format_date(summary.get('fecha_vencimiento_actual'))}",
-            f"• Próximo cierre: {_format_date(summary.get('proximo_cierre'))}",
-            f"• Próximo vencimiento: {_format_date(summary.get('proximo_vencimiento'))}",
+            "📅 *Fechas importantes:*",
+            f"{PRIMARY_BULLET} *Vencimiento:* {_format_date(summary.get('fecha_vencimiento_actual'))}",
+            f"{SECONDARY_BULLET} *Próximo cierre:* {_format_date(summary.get('proximo_cierre'))}",
+            f"{PRIMARY_BULLET} *Próximo vencimiento:* {_format_date(summary.get('proximo_vencimiento'))}",
             "",
-            "*Límites:*",
-            f"• Compra en un pago/cuotas: {_format_amount(summary.get('limite_compra'), 'ARS')}",
-            f"• Financiación: {_format_amount(summary.get('limite_financiacion'), 'ARS')}",
+            "💳 *Límites:*",
+            f"{PRIMARY_BULLET} *Compra en un pago/cuotas:* {_format_amount(summary.get('limite_compra'), 'ARS')}",
+            f"{SECONDARY_BULLET} *Financiación:* {_format_amount(summary.get('limite_financiacion'), 'ARS')}",
             "",
-            "*Detalle:*",
+            "📊 *Detalle:*",
             (
-                f"Detecté {int(metadata.get('transactions_count') or 0)} consumos y "
+                f"{PRIMARY_BULLET} Detecté {int(metadata.get('transactions_count') or 0)} consumos y "
                 f"{int(metadata.get('taxes_and_fees_count') or 0)} cargos/impuestos/ajustes."
             ),
             "",
-            "No incluí avisos legales ni textos informativos del final del resumen.",
+            "ℹ️ No incluí avisos legales ni textos informativos del final del resumen.",
         ]
     )
 
@@ -820,20 +822,20 @@ def _format_largest_transaction_answer(
     by_currency = result.get("by_currency")
     if isinstance(by_currency, dict) and by_currency:
         lines = [
-            "No comparo pesos y dólares directamente, pero estos son los más grandes que encontré:",
+            "📌 *No comparo pesos y dólares directamente,* pero estos son los más grandes que encontré:",
             "",
         ]
 
         ars_transaction = by_currency.get("ARS")
         if isinstance(ars_transaction, dict):
             lines.append(
-                f"• En pesos: {ars_transaction.get('descripcion')} — {_format_amount(ars_transaction.get('importe'), 'ARS')}"
+                f"{PRIMARY_BULLET} *En pesos:* {ars_transaction.get('descripcion')} — {_format_amount(ars_transaction.get('importe'), 'ARS')}"
             )
 
         usd_transaction = by_currency.get("USD")
         if isinstance(usd_transaction, dict):
             lines.append(
-                f"• En dólares: {usd_transaction.get('descripcion')} — {_format_amount(usd_transaction.get('importe'), 'USD')}"
+                f"{SECONDARY_BULLET} *En dólares:* {usd_transaction.get('descripcion')} — {_format_amount(usd_transaction.get('importe'), 'USD')}"
             )
 
         return "\n".join(lines)
@@ -847,17 +849,17 @@ def _format_largest_transaction_answer(
         return "No encontré consumos para calcular el gasto más grande."
 
     lines = [
-        "El consumo más grande que encontré fue:",
+        "📌 *El consumo más grande que encontré fue:*",
         "",
-        f"• {transaction.get('descripcion')} — {_format_amount(transaction.get('importe'), transaction.get('moneda', 'ARS'))}",
-        f"• Fecha: {_format_date(transaction.get('fecha'))}",
+        f"{PRIMARY_BULLET} {transaction.get('descripcion')} — {_format_amount(transaction.get('importe'), transaction.get('moneda', 'ARS'))}",
+        f"{SECONDARY_BULLET} *Fecha:* {_format_date(transaction.get('fecha'))}",
     ]
 
     if transaction.get("titular"):
-        lines.append(f"• Titular: {transaction['titular']}")
+        lines.append(f"{PRIMARY_BULLET} *Titular:* {transaction['titular']}")
 
     if transaction.get("cuota"):
-        lines.append(f"• Cuota: {transaction['cuota']}")
+        lines.append(f"{SECONDARY_BULLET} *Cuota:* {transaction['cuota']}")
 
     return "\n".join(lines)
 
@@ -873,21 +875,21 @@ def _format_transactions_list_answer(result: dict[str, Any]) -> str:
 
     for item in transactions[:MAX_LIST_ITEMS]:
         lines.append(
-            f"• {item.get('descripcion')} — {_format_amount(item.get('importe'), item.get('moneda', 'ARS'))}"
+            f"{_movement_bullet(item.get('moneda'))} {item.get('descripcion')} — {_format_amount(item.get('importe'), item.get('moneda', 'ARS'))}"
         )
 
     if len(transactions) > MAX_LIST_ITEMS:
         lines.extend(
             [
                 "",
-                f"Mostré {MAX_LIST_ITEMS} de {len(transactions)} consumos detectados.",
+                f"ℹ️ Mostré {MAX_LIST_ITEMS} de {len(transactions)} consumos detectados.",
             ]
         )
     else:
         lines.extend(
             [
                 "",
-                f"Detecté {len(transactions)} consumos{_count_suffix(result)}.",
+                f"ℹ️ Detecté {len(transactions)} consumos{_count_suffix(result)}.",
             ]
         )
 
@@ -898,8 +900,8 @@ def _format_total_by_currency_answer(result: dict[str, Any]) -> str:
     currency = result.get("currency") or "ARS"
     label = "dólares" if currency == "USD" else "pesos"
     return (
-        f"Los consumos en {label} suman *{_format_amount(result.get('total'), currency)}*.\n\n"
-        f"Detecté {int(result.get('count') or 0)} consumos en {currency}."
+        f"💰 Los consumos en {label} suman *{_format_amount(result.get('total'), currency)}*.\n\n"
+        f"ℹ️ Detecté {int(result.get('count') or 0)} consumos en {currency}."
     )
 
 
@@ -908,11 +910,11 @@ def _format_total_taxes_answer(result: dict[str, Any]) -> str:
     if not totals:
         return "No encontré impuestos, cargos ni intereses en el resumen analizado."
 
-    lines = ["En impuestos/cargos detecté aproximadamente:"]
+    lines = ["🧾 *En impuestos/cargos detecté aproximadamente:*"]
     if "ARS" in totals:
-        lines.append(f"• *{_format_amount(totals['ARS'], 'ARS')}*")
+        lines.append(f"{PRIMARY_BULLET} *{_format_amount(totals['ARS'], 'ARS')}*")
     if "USD" in totals:
-        lines.append(f"• *{_format_amount(totals['USD'], 'USD')}*")
+        lines.append(f"{SECONDARY_BULLET} *{_format_amount(totals['USD'], 'USD')}*")
 
     descriptions = []
     for item in result.get("items", [])[:5]:
@@ -921,9 +923,9 @@ def _format_total_taxes_answer(result: dict[str, Any]) -> str:
             descriptions.append(description)
 
     if descriptions:
-        lines.extend(["", "Incluye:"])
+        lines.extend(["", "🔎 *Incluye:*"])
         for description in descriptions:
-            lines.append(f"• {description}")
+            lines.append(f"{PRIMARY_BULLET} {description}")
 
     return "\n".join(lines)
 
@@ -933,10 +935,10 @@ def _format_taxes_list_answer(result: dict[str, Any]) -> str:
     if not items:
         return "No encontré impuestos, cargos ni intereses en el resumen analizado."
 
-    lines = ["Estos son los impuestos/cargos que encontré:", ""]
+    lines = ["🧾 *Estos son los impuestos/cargos que encontré:*", ""]
     for item in items[:MAX_LIST_ITEMS]:
         lines.append(
-            f"• {item.get('descripcion')} — {_format_amount(item.get('importe'), item.get('moneda', 'ARS'))}"
+            f"{PRIMARY_BULLET} {item.get('descripcion')} — {_format_amount(item.get('importe'), item.get('moneda', 'ARS'))}"
         )
 
     return "\n".join(lines)
@@ -947,17 +949,17 @@ def _format_installments_answer(result: dict[str, Any]) -> str:
     if not transactions:
         return "No encontré consumos en cuotas en el resumen analizado."
 
-    lines = ["Estos son los consumos en cuotas que encontré:", ""]
+    lines = ["💳 *Estos son los consumos en cuotas que encontré:*", ""]
     for item in transactions[:MAX_LIST_ITEMS]:
         cuota = str(item.get("cuota") or "").strip()
         lines.append(
-            f"• {item.get('descripcion')} — cuota {cuota} — {_format_amount(item.get('importe'), item.get('moneda', 'ARS'))}"
+            f"{PRIMARY_BULLET} {item.get('descripcion')} — *cuota {cuota}* — {_format_amount(item.get('importe'), item.get('moneda', 'ARS'))}"
         )
 
     lines.extend(
         [
             "",
-            f"Detecté {len(transactions)} consumos en cuotas.",
+            f"ℹ️ Detecté {len(transactions)} consumos en cuotas.",
         ]
     )
     return "\n".join(lines)
@@ -966,10 +968,10 @@ def _format_installments_answer(result: dict[str, Any]) -> str:
 def _format_count_answer(result: dict[str, Any]) -> str:
     currency = result.get("currency")
     if currency == "USD":
-        return f"Detecté *{int(result.get('count') or 0)} consumos en USD*."
+        return f"📊 Detecté *{int(result.get('count') or 0)} consumos en USD*."
     if currency == "ARS":
-        return f"Detecté *{int(result.get('count') or 0)} consumos en pesos*."
-    return f"Detecté *{int(result.get('count') or 0)} consumos*."
+        return f"📊 Detecté *{int(result.get('count') or 0)} consumos en pesos*."
+    return f"📊 Detecté *{int(result.get('count') or 0)} consumos*."
 
 
 def _format_search_answer(result: dict[str, Any], normalized_question: str) -> str:
@@ -981,17 +983,17 @@ def _format_search_answer(result: dict[str, Any], normalized_question: str) -> s
 
     if _is_total_like_request(normalized_question):
         totals = result.get("totals") or {}
-        lines = [f"Encontré {len(transactions)} consumos relacionados con *{search_text}*."]
+        lines = [f"🔎 Encontré {len(transactions)} consumos relacionados con *{search_text}*."]
         if "ARS" in totals:
-            lines.append(f"• Total en pesos: *{_format_amount(totals['ARS'], 'ARS')}*")
+            lines.append(f"{PRIMARY_BULLET} *Total en pesos:* {_format_amount(totals['ARS'], 'ARS')}")
         if "USD" in totals:
-            lines.append(f"• Total en dólares: *{_format_amount(totals['USD'], 'USD')}*")
+            lines.append(f"{SECONDARY_BULLET} *Total en dólares:* {_format_amount(totals['USD'], 'USD')}")
         return "\n".join(lines)
 
-    lines = [f"Estos son los consumos que encontré para *{search_text}*:", ""]
+    lines = [f"🔎 *Estos son los consumos que encontré para* *{search_text}*:", ""]
     for item in transactions[:MAX_LIST_ITEMS]:
         lines.append(
-            f"• {item.get('descripcion')} — {_format_amount(item.get('importe'), item.get('moneda', 'ARS'))}"
+            f"{_movement_bullet(item.get('moneda'))} {item.get('descripcion')} — {_format_amount(item.get('importe'), item.get('moneda', 'ARS'))}"
         )
 
     return "\n".join(lines)
@@ -1003,14 +1005,14 @@ def _build_transaction_list_header(result: dict[str, Any]) -> str:
     merchant = result.get("merchant")
 
     if currency == "USD":
-        return "Estos son los consumos en dólares que encontré:"
+        return "💵 *Estos son los consumos en dólares que encontré:*"
     if currency == "ARS":
-        return "Estos son los consumos en pesos que encontré:"
+        return "💸 *Estos son los consumos en pesos que encontré:*"
     if titular:
-        return f"Estos son los consumos de {titular} que encontré:"
+        return f"👤 *Estos son los consumos de {titular} que encontré:*"
     if merchant:
-        return f"Estos son los consumos vinculados a {merchant} que encontré:"
-    return "Estos son los consumos que encontré:"
+        return f"🔎 *Estos son los consumos vinculados a {merchant} que encontré:*"
+    return "🧾 *Estos son los consumos que encontré:*"
 
 
 def _describe_transaction_filters(result: dict[str, Any]) -> str:
@@ -1038,3 +1040,9 @@ def _count_suffix(result: dict[str, Any]) -> str:
     if result.get("titular"):
         return f" de {result['titular']}"
     return ""
+
+
+def _movement_bullet(currency: str | None) -> str:
+    if str(currency or "").upper() == "USD":
+        return SECONDARY_BULLET
+    return PRIMARY_BULLET
