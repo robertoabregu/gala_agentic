@@ -1,11 +1,16 @@
 import re
 import unicodedata
+from typing import Any
 
-from langchain_openai import ChatOpenAI
+try:
+    from langchain_openai import ChatOpenAI
+except ImportError:  # pragma: no cover - fallback solo para tests sin dependencias
+    ChatOpenAI = Any  # type: ignore[misc,assignment]
 
 from agents.state import AgentState
 from core.privacy import extract_identification, mask_sensitive_text
 from observability.logger import log_step
+from services.twilio_media import looks_like_pdf_media
 
 
 VALID_ROUTES = {
@@ -14,6 +19,7 @@ VALID_ROUTES = {
     "bcra_credit_status",
     "branch_locator",
     "benefits",
+    "credit_card_statement",
     "fallback",
     "sensitive",
 }
@@ -174,6 +180,68 @@ BENEFITS_CONTEXT_PATTERNS = (
     "contact less",
     "sin contacto",
     "eminent",
+)
+
+CREDIT_CARD_STATEMENT_PATTERNS = (
+    "resumen de tarjeta",
+    "resumen de la tarjeta",
+    "resumen tarjeta",
+    "gastos del resumen",
+    "consumos del resumen",
+    "analizar resumen",
+    "analizar mi resumen",
+    "leer resumen",
+    "te paso mi resumen de visa",
+    "te paso mi resumen",
+    "quiero analizar mi resumen",
+    "resumen de visa",
+    "pago minimo",
+    "total a pagar",
+    "vencimiento del resumen",
+    "cierre del resumen",
+)
+
+CREDIT_CARD_SUMMARY_TERMS = (
+    "resumen",
+    "pdf",
+    "visa",
+    "mastercard",
+    "items",
+    "gastos",
+    "consumos",
+    "movimientos",
+    "pago minimo",
+    "total a pagar",
+    "vencimiento",
+    "cierre",
+    "impuestos",
+)
+
+CREDIT_CARD_FOLLOWUP_PATTERNS = (
+    "gasto",
+    "gastos",
+    "consumo",
+    "consumos",
+    "movimiento",
+    "movimientos",
+    "dolar",
+    "dolares",
+    "usd",
+    "peso",
+    "pesos",
+    "ars",
+    "impuesto",
+    "impuestos",
+    "cargo",
+    "cargos",
+    "interes",
+    "intereses",
+    "cuota",
+    "cuotas",
+    "mas grande",
+    "mayor",
+    "netflix",
+    "amazon",
 )
 
 BANKING_FALLBACK_PATTERNS = (
@@ -371,6 +439,90 @@ def _is_loans_request(normalized_question: str) -> bool:
     return any(pattern in normalized_question for pattern in LOANS_PATTERNS)
 
 
+def _has_credit_card_statement_memory(memory: dict) -> bool:
+    statement = memory.get("credit_card_statement")
+    return isinstance(statement, dict) and bool(statement)
+
+
+def _is_credit_card_statement_request(
+    normalized_question: str,
+    *,
+    memory: dict,
+    pending_route: str,
+    last_route: str,
+    last_topic: str,
+    is_followup: bool,
+    media: dict,
+) -> bool:
+    has_media = bool(media)
+    has_pdf_media = looks_like_pdf_media(media)
+    has_statement_memory = _has_credit_card_statement_memory(memory)
+    has_summary_context = any(pattern in normalized_question for pattern in CREDIT_CARD_SUMMARY_TERMS)
+    has_explicit_pattern = any(pattern in normalized_question for pattern in CREDIT_CARD_STATEMENT_PATTERNS)
+    has_card_context = any(
+        term in normalized_question
+        for term in (
+            "tarjeta",
+            "tarjeta de credito",
+            "tarjeta credito",
+            "visa",
+            "mastercard",
+        )
+    )
+    has_analysis_intent = any(
+        term in normalized_question
+        for term in (
+            "analizar",
+            "analiza",
+            "entender",
+            "leer",
+            "revisar",
+            "ayudame",
+            "ayudame a leer",
+            "podrias analizar",
+        )
+    )
+    has_followup_detail = any(
+        pattern in normalized_question
+        for pattern in CREDIT_CARD_FOLLOWUP_PATTERNS
+    )
+
+    if pending_route == "credit_card_statement":
+        return True
+
+    if has_pdf_media and (
+        has_summary_context
+        or has_card_context
+        or has_analysis_intent
+        or normalized_question == "analizar resumen de tarjeta adjunto"
+    ):
+        return True
+
+    if has_explicit_pattern:
+        return True
+
+    if has_summary_context and (has_card_context or has_analysis_intent):
+        return True
+
+    if has_summary_context and any(
+        term in normalized_question
+        for term in ("visa", "mastercard", "pdf", "items", "vencimiento", "cierre")
+    ):
+        return True
+
+    if (
+        has_statement_memory
+        and (last_route == "credit_card_statement" or last_topic == "resumen_tarjeta")
+        and (has_followup_detail or "resumen" in normalized_question or is_followup)
+    ):
+        return True
+
+    if has_media and has_card_context and has_summary_context:
+        return True
+
+    return False
+
+
 def _is_benefits_request(normalized_question: str) -> bool:
     if "caja de ahorro" in normalized_question:
         return False
@@ -472,6 +624,7 @@ def router_node(
     last_route = state.get("last_route") or memory.get("last_route", "")
     last_topic = state.get("last_topic") or memory.get("last_topic", "")
     last_assistant_answer = memory.get("last_assistant_answer", "")
+    media = state.get("media") or {}
 
     user_location = state.get("user_location") or {}
     latitude = user_location.get("latitude")
@@ -531,7 +684,7 @@ def router_node(
             "error": None,
         }
 
-    if pending_route in {"bcra_credit_status", "branch_locator"}:
+    if pending_route in {"bcra_credit_status", "branch_locator", "credit_card_statement"}:
         log_step(
             "ROUTER",
             "Ruta recuperada desde memoria local",
@@ -558,6 +711,16 @@ def router_node(
         route = "bcra_credit_status"
     elif _is_bcra_request(normalized_question):
         route = "bcra_credit_status"
+    elif _is_credit_card_statement_request(
+        normalized_question,
+        memory=memory,
+        pending_route=pending_route,
+        last_route=last_route,
+        last_topic=last_topic,
+        is_followup=bool(state.get("is_followup")),
+        media=media,
+    ):
+        route = "credit_card_statement"
     elif _is_loans_request(normalized_question):
         route = "loans_rag"
     elif _is_benefits_request(normalized_question):
@@ -580,7 +743,7 @@ def router_node(
                             "Sos un clasificador de intencion para un chatbot bancario. "
                             "Tu unica tarea es decidir la ruta correcta. "
                             "Responde solamente una de estas palabras: "
-                            "chitchat, loans_rag, bcra_credit_status, branch_locator, benefits, fallback, sensitive.\n\n"
+                            "chitchat, loans_rag, bcra_credit_status, branch_locator, benefits, credit_card_statement, fallback, sensitive.\n\n"
                             "Definicion de chitchat: mensajes sociales, saludos, agradecimientos, "
                             "despedidas, preguntas sobre capacidades del bot, preguntas generales o temas no bancarios fuera del alcance del asistente.\n"
                             "Definicion de fallback: consultas bancarias o financieras que parecen "
@@ -596,6 +759,9 @@ def router_node(
                             "descuentos, ofertas, categorias de beneficios, cuotas en promociones, "
                             "promociones sin interes, pago QR, pago NFC o beneficios del "
                             "segmento Eminent o Eminent Black.\n"
+                            "Usa credit_card_statement cuando el usuario quiera analizar un PDF del resumen "
+                            "de su tarjeta, entender consumos, impuestos, total a pagar, pago minimo, "
+                            "vencimiento o gastos en pesos/dolares del resumen ya analizado.\n"
                             "Usa sensitive si el usuario pide revelar, mostrar, recuperar o "
                             "compartir claves, contrasenas, PIN, tokens, CVV o datos privados.\n"
                             "Usa fallback solo para consultas bancarias o financieras no soportadas.\n\n"
@@ -615,7 +781,11 @@ def router_node(
                             "Usuario: promos de indumentaria\n"
                             "Intent: benefits\n"
                             "Usuario: quiero saber sobre prestamos personales\n"
-                            "Intent: loans_rag"
+                            "Intent: loans_rag\n"
+                            "Usuario: tengo dudas con mi resumen de la tarjeta\n"
+                            "Intent: credit_card_statement\n"
+                            "Usuario: cuanto me cobraron de impuestos en el resumen\n"
+                            "Intent: credit_card_statement"
                         ),
                     ),
                     ("user", masked_question),

@@ -11,6 +11,7 @@ from agents.answer import answer_node
 from agents.bcra_agent import bcra_agent_node
 from agents.benefits import benefits_node
 from agents.branch_locator_tool import branch_locator_node
+from agents.credit_card_statement import credit_card_statement_node
 from agents.guardrail import guardrail_node
 from agents.save_memory import save_memory_node
 
@@ -71,6 +72,12 @@ def build_graph(client, retriever, top_k, score_threshold, chat_model):
     def benefits_wrapper(state: AgentState):
         return benefits_node(state=state)
 
+    def credit_card_statement_wrapper(state: AgentState):
+        return credit_card_statement_node(
+            state=state,
+            llm=llm,
+        )
+
     graph.add_node("contextualizer", contextualizer_wrapper)
     graph.add_node("router", router_wrapper)
     graph.add_node("chitchat_answer", chitchat_wrapper)
@@ -80,6 +87,7 @@ def build_graph(client, retriever, top_k, score_threshold, chat_model):
     graph.add_node("bcra_agent", bcra_agent_wrapper)
     graph.add_node("benefits", benefits_wrapper)
     graph.add_node("branch_locator", branch_locator_wrapper)
+    graph.add_node("credit_card_statement", credit_card_statement_wrapper)
     graph.add_node("guardrail", guardrail_node)
     graph.add_node("save_memory", save_memory_node)
 
@@ -96,6 +104,7 @@ def build_graph(client, retriever, top_k, score_threshold, chat_model):
             "bcra_credit_status": "bcra_agent",
             "benefits": "benefits",
             "branch_locator": "branch_locator",
+            "credit_card_statement": "credit_card_statement",
             "fallback": "guardrail",
             "sensitive": "guardrail",
         },
@@ -108,6 +117,7 @@ def build_graph(client, retriever, top_k, score_threshold, chat_model):
     graph.add_edge("bcra_agent", "guardrail")
     graph.add_edge("benefits", "guardrail")
     graph.add_edge("branch_locator", "guardrail")
+    graph.add_edge("credit_card_statement", "guardrail")
     graph.add_edge("guardrail", "save_memory")
     graph.add_edge("save_memory", END)
 

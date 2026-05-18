@@ -13,6 +13,7 @@ TOPIC_BY_ROUTE = {
     "bcra_credit_status": "situacion_crediticia_bcra",
     "branch_locator": "sucursales_cercanas",
     "benefits": "beneficios",
+    "credit_card_statement": "resumen_tarjeta",
     "chitchat": "conversacion",
     "fallback": "fallback",
 }
@@ -60,6 +61,10 @@ def save_memory_node(state: AgentState) -> AgentState:
         updated_memory["last_user_question"] = mask_sensitive_text(last_user_question)
         updated_memory["last_assistant_answer"] = mask_sensitive_text(final_answer)
 
+    parsed_statement = state.get("credit_card_statement")
+    if isinstance(parsed_statement, dict) and parsed_statement:
+        updated_memory["credit_card_statement"] = parsed_statement
+
     updated_memory["last_route"] = route
     updated_memory["last_topic"] = _infer_topic(route)
     updated_memory["updated_at"] = datetime.now(timezone.utc).isoformat()
@@ -75,6 +80,7 @@ def save_memory_node(state: AgentState) -> AgentState:
             "missing_fields": updated_memory.get("missing_fields", []),
             "last_route": updated_memory.get("last_route", ""),
             "last_topic": updated_memory.get("last_topic", ""),
+            "has_credit_card_statement": bool(updated_memory.get("credit_card_statement")),
         },
     )
 
