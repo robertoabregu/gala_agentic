@@ -16,6 +16,7 @@ DEFAULT_MEMORY = {
     "last_assistant_answer": "",
     "last_topic": "",
     "updated_at": "",
+    "credit_card_statement": {},
 }
 
 
@@ -84,6 +85,12 @@ def _normalize_memory(memory: dict[str, Any] | None) -> dict[str, Any]:
         normalized["updated_at"]
         if isinstance(normalized.get("updated_at"), str)
         else ""
+    )
+
+    normalized["credit_card_statement"] = (
+        normalized["credit_card_statement"]
+        if isinstance(normalized.get("credit_card_statement"), dict)
+        else {}
     )
 
     return normalized

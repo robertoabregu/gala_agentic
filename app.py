@@ -1,10 +1,12 @@
 import re
+from pathlib import PurePosixPath
 
 from flask import Flask, Response, jsonify, request
 from twilio.twiml.messaging_response import MessagingResponse
 
 from core.bot_runner import BotRuntime, prepare_runtime, run_bot_query
 from core.privacy import mask_sensitive_text
+from services.twilio_media import build_media_payload, looks_like_pdf_media
 from services.twilio_typing import send_whatsapp_typing_indicator
 from utils.whatsapp_formatting import format_whatsapp_answer
 
@@ -43,6 +45,29 @@ def twiml_message(body: str, status_code: int = 200) -> Response:
     return Response(str(response), mimetype="application/xml", status=status_code)
 
 
+def _extract_media_from_request() -> dict[str, str]:
+    num_media = (request.form.get("NumMedia") or "").strip()
+    if not num_media or num_media == "0":
+        return {}
+
+    media_url = (request.form.get("MediaUrl0") or "").strip()
+    content_type = (request.form.get("MediaContentType0") or "").strip()
+    filename = (request.form.get("MediaFilename0") or "").strip()
+
+    if not filename and media_url:
+        filename = PurePosixPath(media_url.split("?", 1)[0]).name or ""
+
+    if not filename:
+        filename = "attachment.pdf" if "pdf" in content_type.lower() else "attachment"
+
+    return build_media_payload(
+        num_media=num_media,
+        url=media_url,
+        content_type=content_type,
+        filename=filename,
+    )
+
+
 @app.get("/")
 def root() -> Response:
     return jsonify({"status": "ok", "service": "gala-whatsapp-bot"})
@@ -63,6 +88,7 @@ def handle_whatsapp_message() -> Response:
     longitude = (request.form.get("Longitude") or "").strip()
     address = (request.form.get("Address") or "").strip()
     label = (request.form.get("Label") or "").strip()
+    media = _extract_media_from_request()
 
     user_location = {}
     if latitude and longitude:
@@ -76,6 +102,12 @@ def handle_whatsapp_message() -> Response:
     try:
         if not body and user_location:
             body = "Ubicacion compartida por WhatsApp"
+        elif not body and media:
+            body = (
+                "Analizar resumen de tarjeta adjunto"
+                if looks_like_pdf_media(media)
+                else "Archivo adjunto enviado"
+            )
 
         if not body:
             return twiml_message("No recibí tu mensaje. Probá de nuevo, por favor.")
@@ -86,6 +118,9 @@ def handle_whatsapp_message() -> Response:
 
         if user_location:
             print("  - location: recibida")
+        if media:
+            print("  - media: adjunto recibido")
+            print(f"  - media_content_type: {media.get('content_type', '')}")
 
         send_whatsapp_typing_indicator(message_sid)
 
@@ -97,6 +132,7 @@ def handle_whatsapp_message() -> Response:
             langfuse_tags=["gala", "langgraph", "rag", "whatsapp"],
             observation_name="gala-whatsapp-request",
             user_location=user_location,
+            media=media,
         )
 
         formatted_answer = format_whatsapp_answer(

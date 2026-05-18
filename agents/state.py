@@ -23,3 +23,5 @@ class AgentState(TypedDict):
     needs_clarification: NotRequired[bool]
     missing_fields: NotRequired[List[str]]
     user_location: NotRequired[Dict[str, Any]]
+    media: NotRequired[Dict[str, Any]]
+    credit_card_statement: NotRequired[Dict[str, Any]]
