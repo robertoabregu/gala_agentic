@@ -6,25 +6,12 @@ import time
 import unicodedata
 from datetime import datetime
 from functools import lru_cache
-from typing import Any
+from typing import Any, Iterable
+from urllib.parse import quote
 
 import requests
 
 from observability.logger import log_step
-from tools import benefits_mock as mock_benefits
-
-
-def _get_bool_env(name: str, default: bool) -> bool:
-    value = os.getenv(name)
-    if value is None:
-        return default
-
-    normalized = value.strip().lower()
-    if normalized in {"1", "true", "t", "yes", "y", "on"}:
-        return True
-    if normalized in {"0", "false", "f", "no", "n", "off"}:
-        return False
-    return default
 
 
 def _get_int_env(name: str, default: int) -> int:
@@ -45,10 +32,7 @@ BENEFITS_API_BASE_URL = os.getenv(
     "BENEFITS_API_BASE_URL",
     "https://loyalty.bff.bancogalicia.com.ar/api/portal/personalizacion/v1",
 ).rstrip("/")
-BENEFITS_CAROUSEL_ID = os.getenv("BENEFITS_CAROUSEL_ID", "152").strip() or "152"
-BENEFITS_PAGE_SIZE = max(1, _get_int_env("BENEFITS_PAGE_SIZE", 50))
 BENEFITS_REQUEST_TIMEOUT = max(1.0, _get_float_env("BENEFITS_REQUEST_TIMEOUT", 8))
-BENEFITS_USE_REAL_API = _get_bool_env("BENEFITS_USE_REAL_API", True)
 BENEFITS_CACHE_TTL_SECONDS = max(60, _get_int_env("BENEFITS_CACHE_TTL_SECONDS", 600))
 BENEFITS_SEGMENT = "Eminent Black"
 
@@ -74,51 +58,135 @@ DAYS_ORDER = [
 CATEGORY_SYNONYMS = {
     "Supermercados": (
         "super",
-        "súper",
+        "superes",
         "supermercado",
         "supermercados",
-        "mercado",
-        "superes",
-        "compras del super",
-        "promos del super",
-        "beneficios del super",
+        "changomas",
+        "carrefour",
+        "disco",
+        "jumbo",
+        "vea",
     ),
     "Gastronomía": (
         "gastronomia",
-        "gastronomía",
+        "comida",
+        "comer",
+        "delivery",
+        "pedir comida",
         "restaurante",
         "restaurantes",
-        "comida",
         "cafe",
-        "café",
+        "cafeteria",
+        "helado",
+        "hamburguesa",
+        "sushi",
     ),
     "Indumentaria": (
         "ropa",
         "indumentaria",
+        "zapatilla",
         "zapatillas",
+        "zapas",
+        "calzado",
+        "moda",
+        "vestimenta",
     ),
     "Electrónica": (
         "electronica",
-        "electrónica",
-        "celulares",
-        "celular",
+        "electro",
+        "electrodomestico",
+        "electrodomesticos",
         "tecnologia",
-        "tecnología",
+        "celular",
+        "celulares",
+        "notebook",
+        "tv",
+        "televisor",
+        "heladera",
+        "lavarropas",
     ),
     "Hogar": (
         "hogar",
         "casa",
         "muebles",
-        "pintureria",
-        "pinturería",
+        "deco",
+        "decoracion",
+        "bazar",
+        "colchon",
+        "colchones",
+    ),
+    "Vehículos": (
+        "vehiculo",
+        "vehiculos",
+        "auto",
+        "autos",
+        "moto",
+        "motos",
+        "neumatico",
+        "neumaticos",
+    ),
+    "Salud y Bienestar": (
+        "salud",
+        "bienestar",
+        "farmacia",
+        "farmacias",
+        "perfumeria",
+        "gimnasio",
+    ),
+    "Viajes": (
+        "viaje",
+        "viajes",
+        "turismo",
+        "hotel",
+        "hoteles",
+        "vuelo",
+        "vuelos",
+        "pasaje",
+        "pasajes",
+    ),
+    "Entretenimiento": (
+        "entretenimiento",
+        "cine",
+        "teatro",
+        "recital",
+        "show",
+        "streaming",
+    ),
+    "Librerías": (
+        "libreria",
+        "librerias",
+        "libro",
+        "libros",
+        "utiles",
+        "escolares",
+    ),
+    "Shopping": (
+        "shopping",
+        "shoppings",
+        "mall",
+        "outlet",
+    ),
+    "Mascotas": (
+        "mascota",
+        "mascotas",
+        "pet",
+        "veterinaria",
+        "perro",
+        "gato",
+    ),
+    "Juguetes": (
+        "juguete",
+        "juguetes",
+        "juego",
+        "juegos",
     ),
     "Transportes": (
         "transporte",
         "transportes",
-        "viaje",
-        "viajes",
-        "turismo",
-        "pasajes",
+        "sube",
+        "taxi",
+        "remis",
+        "colectivo",
     ),
 }
 
@@ -135,7 +203,6 @@ ONLY_EMINENT_PATTERNS = (
     "beneficios por ser eminent",
     "exclusivo eminent",
     "exclusivos eminent",
-    "eminent este mes",
     "solo eminent",
     "solo beneficios eminent",
     "solo exclusivos",
@@ -209,7 +276,7 @@ BENEFITS_STOPWORDS = {
     "busca",
     "buscar",
     "categoria",
-    "categoría",
+    "categorias",
     "consulta",
     "consultar",
     "con",
@@ -224,6 +291,8 @@ BENEFITS_STOPWORDS = {
     "disponibles",
     "el",
     "en",
+    "este",
+    "favor",
     "hay",
     "la",
     "las",
@@ -231,14 +300,20 @@ BENEFITS_STOPWORDS = {
     "me",
     "mi",
     "mis",
-    "mes",
     "mostrar",
     "mostrame",
     "mostrames",
     "mostrarlos",
+    "necesito",
+    "nueva",
+    "nuevas",
+    "nuevo",
+    "nuevos",
     "oferta",
     "ofertas",
     "para",
+    "pedir",
+    "pidiendo",
     "pagos",
     "pagar",
     "por",
@@ -246,9 +321,7 @@ BENEFITS_STOPWORDS = {
     "promocion",
     "promociones",
     "promos",
-    "promoción",
     "que",
-    "qué",
     "quiero",
     "quisiera",
     "rubro",
@@ -256,18 +329,18 @@ BENEFITS_STOPWORDS = {
     "sin",
     "sobre",
     "soy",
-    "este",
-    "actual",
-    "ahora",
+    "tengo",
     "tenes",
     "tenés",
-    "tengo",
     "tienen",
     "un",
     "una",
     "unos",
     "unas",
     "ver",
+    "comprar",
+    "comprarme",
+    "compra",
 }
 
 GENERIC_QUERY_TOKENS = {
@@ -306,7 +379,6 @@ GENERIC_QUERY_TOKENS = {
     "del",
     "descuento",
     "descuentos",
-    "este",
     "dia",
     "dias",
     "disponible",
@@ -345,6 +417,7 @@ GENERIC_QUERY_TOKENS = {
     "pagar",
     "para",
     "pedime",
+    "pedir",
     "por",
     "promo",
     "promocion",
@@ -366,12 +439,10 @@ GENERIC_QUERY_TOKENS = {
     "solo",
     "sobre",
     "sus",
-    "tenemos",
-    "tenes",
     "tengo",
+    "tenes",
     "tenés",
     "tienen",
-    "mes",
     "todos",
     "todas",
     "un",
@@ -383,6 +454,14 @@ GENERIC_QUERY_TOKENS = {
     "vigentes",
     "y",
     "yo",
+    "comprar",
+    "comprarme",
+    "compra",
+    "necesito",
+    "nueva",
+    "nuevas",
+    "nuevo",
+    "nuevos",
 }
 
 _CACHE_MISS = object()
@@ -456,48 +535,18 @@ def get_benefits_segment() -> str:
 
 
 def list_benefit_categories() -> list[str]:
-    cached = _read_cache(_CATEGORIES_CACHE)
-    if cached is not _CACHE_MISS:
-        return list(cached)
-
-    if not BENEFITS_USE_REAL_API:
-        categories = mock_benefits.list_benefit_categories()
-        _write_cache(_CATEGORIES_CACHE, categories, source="fallback_config")
-        return list(categories)
-
-    try:
-        categories = _fetch_live_categories()
-        if not categories:
-            raise ValueError("La API de categorias no devolvio elementos.")
-
-        _write_cache(_CATEGORIES_CACHE, categories, source="api")
-        log_step("BENEFITS_API", "Categorias actualizadas desde la API", {"results": len(categories)})
-        return list(categories)
-    except Exception as exc:
-        log_step(
-            "BENEFITS_API",
-            "Fallback al mock para categorias de beneficios",
-            {"error": str(exc)},
-        )
-        categories = mock_benefits.list_benefit_categories()
-        _write_cache(_CATEGORIES_CACHE, categories, source="fallback_error")
-        return list(categories)
+    return [
+        str(category.get("description") or "").strip()
+        for category in _get_category_records()
+        if str(category.get("description") or "").strip()
+    ]
 
 
 def resolve_benefit_category(text: str | None) -> str | None:
-    normalized = _normalize_text(text)
-    if not normalized:
+    record = _resolve_category_record(text)
+    if not record:
         return None
-
-    for category in list_benefit_categories():
-        if _text_matches_category(normalized, category):
-            return category
-
-    for category, aliases in CATEGORY_SYNONYMS.items():
-        if any(_text_matches_alias(normalized, alias) for alias in aliases):
-            return category
-
-    return None
+    return str(record.get("description") or "").strip() or None
 
 
 def infer_benefits_filters(text: str | None) -> dict[str, Any]:
@@ -558,6 +607,7 @@ def search_benefits(
     exclude_eminent: bool = False,
     limit: int = 5,
     *,
+    raw_query: str | None = None,
     only_qr: bool = False,
     only_nfc: bool = False,
     today_only: bool = False,
@@ -567,7 +617,8 @@ def search_benefits(
     interest_free: bool = False,
     search_terms: list[str] | None = None,
 ) -> list[dict[str, Any]]:
-    inferred_filters = infer_benefits_filters(query)
+    effective_query = raw_query or query or ""
+    inferred_filters = infer_benefits_filters(effective_query)
     canonical_category = resolve_benefit_category(category) or inferred_filters["category"]
     normalized_search_terms = [
         _normalize_text(term)
@@ -587,44 +638,49 @@ def search_benefits(
         or requested_installments is not None
     )
     requires_interest_free = interest_free or inferred_filters["interest_free"]
-    day_filter = _today_day_name() if effective_today_only else None
 
-    results: list[dict[str, Any]] = []
+    base_results = _filter_benefits(
+        _iter_benefits(),
+        category=canonical_category,
+        search_terms=normalized_search_terms,
+        exclude_eminent=should_exclude_eminent,
+        only_eminent=should_only_eminent,
+        only_qr=effective_only_qr,
+        only_nfc=effective_only_nfc,
+        today_only=effective_today_only,
+        every_day_only=effective_every_day_only,
+        installments=requested_installments,
+        has_installments=requires_installments,
+        interest_free=requires_interest_free,
+        limit=limit,
+    )
+    if base_results:
+        return base_results
 
-    for benefit in _iter_benefits():
-        if canonical_category and not _benefit_matches_category(benefit.get("categoria"), canonical_category):
-            continue
+    targeted_benefits = _fetch_targeted_benefits(
+        raw_query=effective_query,
+        category=canonical_category,
+        search_terms=normalized_search_terms,
+        limit=limit,
+    )
+    if not targeted_benefits:
+        return []
 
-        if should_exclude_eminent and _is_eminent_benefit(benefit):
-            continue
-
-        if should_only_eminent and not _is_eminent_benefit(benefit):
-            continue
-
-        if effective_only_qr and not benefit.get("pagoQR"):
-            continue
-
-        if effective_only_nfc and not _has_nfc_payment(benefit):
-            continue
-
-        if effective_every_day_only and not _is_every_day(benefit.get("dias")):
-            continue
-
-        if day_filter and not _matches_day(benefit.get("dias"), day_filter):
-            continue
-
-        if requires_installments and not _matches_installments(benefit, requested_installments):
-            continue
-
-        if requires_interest_free and not _matches_interest_free(benefit):
-            continue
-
-        if normalized_search_terms and not _matches_query_terms(benefit, normalized_search_terms):
-            continue
-
-        results.append(benefit)
-
-    return results[: max(1, limit)]
+    return _filter_benefits(
+        targeted_benefits,
+        category=canonical_category,
+        search_terms=normalized_search_terms,
+        exclude_eminent=should_exclude_eminent,
+        only_eminent=should_only_eminent,
+        only_qr=effective_only_qr,
+        only_nfc=effective_only_nfc,
+        today_only=effective_today_only,
+        every_day_only=effective_every_day_only,
+        installments=requested_installments,
+        has_installments=requires_installments,
+        interest_free=requires_interest_free,
+        limit=limit,
+    )
 
 
 def _iter_benefits() -> list[dict[str, Any]]:
@@ -632,31 +688,48 @@ def _iter_benefits() -> list[dict[str, Any]]:
     if cached is not _CACHE_MISS:
         return list(cached)
 
-    if not BENEFITS_USE_REAL_API:
-        benefits = _load_mock_promotions()
-        _write_cache(_PROMOTIONS_CACHE, benefits, source="fallback_config")
-        _merchant_index.cache_clear()
-        return list(benefits)
-
-    try:
-        benefits = _fetch_live_promotions()
-        _write_cache(_PROMOTIONS_CACHE, benefits, source="api")
-        _merchant_index.cache_clear()
-        log_step("BENEFITS_API", "Promociones actualizadas desde la API", {"results": len(benefits)})
-        return list(benefits)
-    except Exception as exc:
-        log_step(
-            "BENEFITS_API",
-            "Fallback al mock para promociones de beneficios",
-            {"error": str(exc)},
-        )
-        benefits = _load_mock_promotions()
-        _write_cache(_PROMOTIONS_CACHE, benefits, source="fallback_error")
-        _merchant_index.cache_clear()
-        return list(benefits)
+    benefits = _fetch_live_promotions()
+    _write_cache(_PROMOTIONS_CACHE, benefits, source="api")
+    _merchant_index.cache_clear()
+    log_step("BENEFITS_API", "Promociones base actualizadas desde la API", {"results": len(benefits)})
+    return list(benefits)
 
 
-def _fetch_live_categories() -> list[str]:
+def _get_category_records() -> list[dict[str, Any]]:
+    cached = _read_cache(_CATEGORIES_CACHE)
+    if cached is not _CACHE_MISS:
+        return list(cached)
+
+    categories = _fetch_live_categories()
+    _write_cache(_CATEGORIES_CACHE, categories, source="api")
+    log_step("BENEFITS_API", "Categorias actualizadas desde la API", {"results": len(categories)})
+    return list(categories)
+
+
+def _resolve_category_record(text: str | None) -> dict[str, Any] | None:
+    normalized = _normalize_text(text)
+    if not normalized:
+        return None
+
+    categories = _get_category_records()
+    for category in categories:
+        description = str(category.get("description") or "").strip()
+        if description and _text_matches_category(normalized, description):
+            return category
+
+    for canonical_name, aliases in CATEGORY_SYNONYMS.items():
+        if not any(_text_matches_alias(normalized, alias) for alias in aliases):
+            continue
+
+        for category in categories:
+            description = str(category.get("description") or "").strip()
+            if _normalize_text(description) == _normalize_text(canonical_name):
+                return category
+
+    return None
+
+
+def _fetch_live_categories() -> list[dict[str, Any]]:
     payload = _fetch_json(
         "categorias",
         params={
@@ -669,7 +742,7 @@ def _fetch_live_categories() -> list[str]:
     if not isinstance(items, list):
         raise ValueError("La respuesta de categorias no contiene una lista valida.")
 
-    categories: list[str] = []
+    categories: list[dict[str, Any]] = []
     seen: set[str] = set()
 
     for item in items:
@@ -681,34 +754,25 @@ def _fetch_live_categories() -> list[str]:
             continue
 
         seen.add(description)
-        categories.append(description)
+        categories.append(
+            {
+                "id": _safe_int(item.get("id")),
+                "description": description,
+                "emoji": str(item.get("emoji") or "").strip(),
+            }
+        )
 
     return categories
 
 
 def _fetch_live_promotions() -> list[dict[str, Any]]:
-    benefits = _fetch_live_catalog_promotions()
-    if benefits:
-        log_step(
-            "BENEFITS_API",
-            "Promociones obtenidas desde catalogo",
-            {"results": len(benefits)},
-        )
-        return benefits
-
-    log_step(
-        "BENEFITS_API",
-        "Catalogo de promociones vacio; se intenta fallback al carrusel",
-        {},
-    )
-
-    return _fetch_live_carousel_promotions()
+    return _fetch_catalog_promotions(params={})
 
 
-def _fetch_live_catalog_promotions() -> list[dict[str, Any]]:
+def _fetch_catalog_promotions(params: Any) -> list[dict[str, Any]]:
     payload = _fetch_json(
         "promociones/catalogo",
-        params={},
+        params=params,
     )
     items = ((payload.get("data") or {}).get("list")) or []
     if not isinstance(items, list):
@@ -741,72 +805,7 @@ def _fetch_live_catalog_promotions() -> list[dict[str, Any]]:
     return promotions
 
 
-def _fetch_live_carousel_promotions() -> list[dict[str, Any]]:
-    page = 1
-    total_size: int | None = None
-    promotions: list[dict[str, Any]] = []
-    seen_ids: set[str] = set()
-
-    while True:
-        payload = _fetch_json(
-            f"promociones/list/carrusel/{BENEFITS_CAROUSEL_ID}",
-            params={
-                "page": page,
-                "pageSize": BENEFITS_PAGE_SIZE,
-                "cardEspecial": "true",
-            },
-        )
-        promotions_block = ((payload.get("data") or {}).get("promociones")) or {}
-        page_items = promotions_block.get("list") or []
-        if not isinstance(page_items, list):
-            raise ValueError("La respuesta de promociones no contiene una lista valida.")
-
-        block_total_size = _safe_int(promotions_block.get("totalSize"))
-        if total_size is None and block_total_size is not None:
-            total_size = block_total_size
-
-        added_this_page = 0
-
-        for promo in page_items:
-            if not isinstance(promo, dict):
-                continue
-
-            benefit = _normalize_promotion(promo)
-            dedupe_key = str(benefit.get("id") or "")
-            if not dedupe_key:
-                dedupe_key = "|".join(
-                    [
-                        str(benefit.get("comercio") or ""),
-                        str(benefit.get("beneficio") or ""),
-                        str(benefit.get("categoria") or ""),
-                        str(page),
-                    ]
-                )
-
-            if dedupe_key in seen_ids:
-                continue
-
-            seen_ids.add(dedupe_key)
-            promotions.append(benefit)
-            added_this_page += 1
-
-        if total_size is not None and len(promotions) >= total_size:
-            break
-
-        if not page_items or added_this_page == 0:
-            break
-
-        if len(page_items) < BENEFITS_PAGE_SIZE and total_size is None:
-            break
-
-        page += 1
-        if page > 100:
-            break
-
-    return promotions
-
-
-def _fetch_json(path: str, *, params: dict[str, Any]) -> dict[str, Any]:
+def _fetch_json(path: str, *, params: Any) -> dict[str, Any]:
     url = f"{BENEFITS_API_BASE_URL}/{path.lstrip('/')}"
     response = requests.get(
         url,
@@ -895,21 +894,6 @@ def _normalize_payment_methods(payment_methods: list[Any]) -> list[str]:
     return normalized_methods
 
 
-def _normalize_existing_payment_methods(payment_methods: list[Any]) -> list[str]:
-    normalized_methods: list[str] = []
-    seen: set[str] = set()
-
-    for method in payment_methods:
-        normalized_type = _normalize_payment_type(method)
-        if not normalized_type or normalized_type in seen:
-            continue
-
-        seen.add(normalized_type)
-        normalized_methods.append(normalized_type)
-
-    return normalized_methods
-
-
 def _normalize_payment_type(value: Any) -> str | None:
     raw_value = str(value or "").strip()
     normalized_value = _normalize_text(raw_value)
@@ -924,70 +908,6 @@ def _normalize_payment_type(value: Any) -> str | None:
         return "Débito"
 
     return raw_value.title()
-
-
-def _load_mock_promotions() -> list[dict[str, Any]]:
-    data = mock_benefits.load_mock_benefits()
-    categories = data.get("categorias") or []
-    benefits: list[dict[str, Any]] = []
-
-    for category_entry in categories:
-        if not isinstance(category_entry, dict):
-            continue
-
-        category_name = str(category_entry.get("categoria") or "").strip() or "Otros"
-        category_benefits = category_entry.get("beneficios") or []
-
-        if not isinstance(category_benefits, list):
-            continue
-
-        for benefit in category_benefits:
-            if not isinstance(benefit, dict):
-                continue
-
-            commerce = str(benefit.get("comercio") or "").strip() or "Beneficio"
-            benefit_text = str(benefit.get("beneficio") or "").strip() or "Beneficio disponible"
-            days = str(benefit.get("dias") or "").strip()
-            additional_text = str(benefit.get("adicional") or "").strip()
-            end_date = benefit.get("fechaHasta") or benefit.get("vigenciaHasta")
-            contact_less = bool(benefit.get("contactLess"))
-            eminent_flag = bool(benefit.get("eminent")) or bool(benefit.get("exclusivoEminent"))
-
-            benefits.append(
-                {
-                    "id": benefit.get("id"),
-                    "comercio": commerce,
-                    "beneficio": benefit_text,
-                    "categoria": category_name,
-                    "dias": days,
-                    "mediosDePago": _normalize_existing_payment_methods(
-                        benefit.get("mediosDePago") or []
-                    ),
-                    "exclusivoEminent": bool(benefit.get("exclusivoEminent")),
-                    "eminent": eminent_flag,
-                    "pagoQR": bool(benefit.get("pagoQR")),
-                    "pagoNFC": bool(benefit.get("pagoNFC")) or contact_less,
-                    "contactLess": contact_less,
-                    "proximamente": bool(benefit.get("proximamente")),
-                    "fechaHasta": end_date,
-                    "vigenciaHasta": end_date,
-                    "imagen": benefit.get("imagen"),
-                    "tipoPromocion": benefit.get("tipoPromocion"),
-                    "adicional": additional_text,
-                    "modeloAtencionNombre": str(benefit.get("modeloAtencionNombre") or "").strip(),
-                    "raw_text": _build_raw_text(
-                        commerce,
-                        benefit_text,
-                        category_name,
-                        days,
-                        additional_text,
-                        str(benefit.get("modeloAtencionNombre") or "").strip(),
-                    ),
-                    "segmento": get_benefits_segment(),
-                }
-            )
-
-    return benefits
 
 
 @lru_cache(maxsize=1)
@@ -1013,7 +933,7 @@ def _merchant_index() -> list[dict[str, Any]]:
         entry["aliases"].add(normalized_name)
 
         for token in normalized_name.split():
-            if len(token) >= 5 and token not in NORMALIZED_GENERIC_QUERY_TOKENS:
+            if len(token) >= 4 and token not in NORMALIZED_GENERIC_QUERY_TOKENS:
                 entry["aliases"].add(token)
 
     indexed_merchants: list[dict[str, Any]] = []
@@ -1130,11 +1050,11 @@ def _text_matches_alias(text: str, alias: str) -> bool:
     text_tokens = normalized_text.split()
 
     for alias_token in alias_tokens:
-        if len(alias_token) < 5 or alias_token in NORMALIZED_GENERIC_QUERY_TOKENS:
+        if len(alias_token) < 4 or alias_token in NORMALIZED_GENERIC_QUERY_TOKENS:
             continue
 
         for text_token in text_tokens:
-            if len(text_token) < 5 or text_token in NORMALIZED_GENERIC_QUERY_TOKENS:
+            if len(text_token) < 4 or text_token in NORMALIZED_GENERIC_QUERY_TOKENS:
                 continue
 
             if alias_token.startswith(text_token) or text_token.startswith(alias_token):
@@ -1309,6 +1229,280 @@ def _expand_day_range(start_day: str, end_day: str) -> list[str]:
         return DAYS_ORDER[start_index : end_index + 1]
 
     return DAYS_ORDER[start_index:] + DAYS_ORDER[: end_index + 1]
+
+
+def _filter_benefits(
+    benefits: Iterable[dict[str, Any]],
+    *,
+    category: str | None,
+    search_terms: list[str],
+    exclude_eminent: bool,
+    only_eminent: bool,
+    only_qr: bool,
+    only_nfc: bool,
+    today_only: bool,
+    every_day_only: bool,
+    installments: int | None,
+    has_installments: bool,
+    interest_free: bool,
+    limit: int,
+) -> list[dict[str, Any]]:
+    day_filter = _today_day_name() if today_only else None
+    results: list[dict[str, Any]] = []
+
+    for benefit in benefits:
+        if category and not _benefit_matches_category(benefit.get("categoria"), category):
+            continue
+
+        if exclude_eminent and _is_eminent_benefit(benefit):
+            continue
+
+        if only_eminent and not _is_eminent_benefit(benefit):
+            continue
+
+        if only_qr and not benefit.get("pagoQR"):
+            continue
+
+        if only_nfc and not _has_nfc_payment(benefit):
+            continue
+
+        if every_day_only and not _is_every_day(benefit.get("dias")):
+            continue
+
+        if day_filter and not _matches_day(benefit.get("dias"), day_filter):
+            continue
+
+        if has_installments and not _matches_installments(benefit, installments):
+            continue
+
+        if interest_free and not _matches_interest_free(benefit):
+            continue
+
+        if search_terms and not _matches_query_terms(benefit, search_terms):
+            continue
+
+        results.append(benefit)
+        if len(results) >= max(1, limit):
+            break
+
+    return results
+
+
+def _fetch_targeted_benefits(
+    *,
+    raw_query: str,
+    category: str | None,
+    search_terms: list[str],
+    limit: int,
+) -> list[dict[str, Any]]:
+    collected: list[dict[str, Any]] = []
+    seen_keys: set[str] = set()
+
+    def append_promotions(promotions: Iterable[dict[str, Any]]) -> None:
+        for promotion in promotions:
+            promotion_key = str(promotion.get("id") or "")
+            if not promotion_key:
+                promotion_key = "|".join(
+                    [
+                        str(promotion.get("comercio") or ""),
+                        str(promotion.get("beneficio") or ""),
+                        str(promotion.get("categoria") or ""),
+                    ]
+                )
+            if promotion_key in seen_keys:
+                continue
+            seen_keys.add(promotion_key)
+            collected.append(promotion)
+
+    if category:
+        category_promotions = _fetch_category_promotions(category)
+        append_promotions(category_promotions)
+
+    query_variants = _build_live_search_queries(
+        raw_query=raw_query,
+        category=category,
+        search_terms=search_terms,
+    )
+    category_record = _resolve_category_record(category) if category else None
+
+    for query_variant in query_variants:
+        targets = _search_live_targets(query_variant, limit=8)
+        for target in targets:
+            if category_record and not _target_matches_category(target, category_record):
+                continue
+
+            target_promotions = _fetch_target_promotions(target)
+            if not target_promotions:
+                continue
+
+            append_promotions(target_promotions)
+            if len(collected) >= max(1, limit):
+                return collected
+
+    return collected
+
+
+def _build_live_search_queries(
+    *,
+    raw_query: str,
+    category: str | None,
+    search_terms: list[str],
+) -> list[str]:
+    queries: list[str] = []
+    seen: set[str] = set()
+
+    def add_query(value: str | None) -> None:
+        normalized = _normalize_text(value)
+        if not normalized or normalized in seen or len(normalized) < 3:
+            return
+        seen.add(normalized)
+        queries.append(normalized)
+
+    if search_terms:
+        add_query(" ".join(search_terms))
+        for term in search_terms:
+            add_query(term)
+
+    free_text_terms = _extract_free_text_terms(raw_query)
+    if free_text_terms:
+        add_query(" ".join(free_text_terms))
+        for term in free_text_terms:
+            add_query(term)
+
+    if category:
+        add_query(category)
+        for alias in CATEGORY_SYNONYMS.get(category, ()):
+            add_query(alias)
+
+    return queries
+
+
+def _search_live_targets(query: str, limit: int = 8) -> list[dict[str, Any]]:
+    normalized_query = _normalize_text(query)
+    if not normalized_query:
+        return []
+
+    encoded_query = quote(normalized_query, safe="")
+    payload = _fetch_json(
+        f"buscador/search/{encoded_query}",
+        params={"limit": max(1, limit)},
+    )
+    items = payload.get("data") or []
+    if not isinstance(items, list):
+        return []
+
+    targets: list[dict[str, Any]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+
+        raw_ids = item.get("ids") or []
+        ids = [
+            item_id
+            for item_id in (_safe_int(raw_id) for raw_id in raw_ids if raw_ids)
+            if item_id is not None
+        ]
+        target_type = str(item.get("tipo") or "").strip()
+        name = str(item.get("nombre") or "").strip()
+        navigation = str(item.get("navegacion") or "").strip()
+        category_id = _safe_int(item.get("idCategoria"))
+
+        if not name and not navigation:
+            continue
+
+        targets.append(
+            {
+                "ids": ids,
+                "name": name,
+                "type": target_type,
+                "navigation": navigation,
+                "category_id": category_id,
+                "normalized_name": _normalize_text(name),
+            }
+        )
+
+    return targets
+
+
+def _target_matches_category(target: dict[str, Any], category_record: dict[str, Any]) -> bool:
+    requested_category_id = _safe_int(category_record.get("id"))
+    target_category_id = _safe_int(target.get("category_id"))
+
+    if target_category_id is not None and requested_category_id is not None:
+        return target_category_id == requested_category_id
+
+    target_name = str(target.get("name") or "").strip()
+    if target_name and _benefit_matches_category(target_name, str(category_record.get("description") or "")):
+        return True
+
+    navigation_category_id = _extract_category_id_from_navigation(str(target.get("navigation") or ""))
+    if requested_category_id is not None and navigation_category_id is not None:
+        return navigation_category_id == requested_category_id
+
+    return target_category_id in {None, 0}
+
+
+def _fetch_category_promotions(category: str) -> list[dict[str, Any]]:
+    category_record = _resolve_category_record(category)
+    if not category_record:
+        return []
+
+    category_id = _safe_int(category_record.get("id"))
+    if category_id is None:
+        return []
+
+    return _fetch_catalog_promotions(
+        params={
+            "IdCategoria": category_id,
+            "TipoPromocion": "categoria",
+        }
+    )
+
+
+def _fetch_target_promotions(target: dict[str, Any]) -> list[dict[str, Any]]:
+    target_type = str(target.get("type") or "").strip()
+    if target_type.lower() in {"marca", "shopping"}:
+        return _fetch_brand_promotions(target)
+
+    category_id = _extract_category_id_from_navigation(str(target.get("navigation") or ""))
+    if category_id is None:
+        category_id = _safe_int(target.get("category_id"))
+
+    if category_id is None:
+        return []
+
+    return _fetch_catalog_promotions(
+        params={
+            "IdCategoria": category_id,
+            "TipoPromocion": "categoria",
+        }
+    )
+
+
+def _fetch_brand_promotions(target: dict[str, Any]) -> list[dict[str, Any]]:
+    brand_ids = [
+        brand_id
+        for brand_id in (_safe_int(raw_id) for raw_id in target.get("ids") or [])
+        if brand_id is not None
+    ]
+    if not brand_ids:
+        return []
+
+    params: list[tuple[str, Any]] = [("IdsMarca", brand_id) for brand_id in brand_ids]
+    params.append(("TipoPromocion", str(target.get("type") or "Marca").strip() or "Marca"))
+    return _fetch_catalog_promotions(params=params)
+
+
+def _extract_category_id_from_navigation(navigation: str) -> int | None:
+    normalized_navigation = _normalize_text(navigation)
+    if not normalized_navigation:
+        return None
+
+    match = re.search(r"(?:idcategoria|categoria)\s*(?:=|/)\s*(\d+)", normalized_navigation)
+    if not match:
+        return None
+
+    return _safe_int(match.group(1))
 
 
 def _safe_int(value: Any) -> int | None:

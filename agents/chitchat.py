@@ -74,14 +74,14 @@ def _is_greeting(normalized_question: str) -> bool:
 
 def _build_greeting_response(user_name: str = "") -> str:
     return (
-        "👋 *Hola, ¿cómo estás?* Soy Gala.\n\n"
-        "Podés escribirme lo que necesitás o elegir un tema y avanzamos.\n\n"
-        "*Actualmente puedo ayudarte con:*\n"
-        "🔹 *Consultas sobre préstamos*\n"
-        "🔹 *Consulta de situación crediticia*\n"
-        "🔹 *Búsqueda de sucursales cercanas*\n"
-        "🔹 *Búsqueda de beneficios*\n"
-        "🔹 *Análisis de resúmenes de tarjeta en PDF*"
+        "👋 *Hola*, ¿cómo estás? Soy Gala.\n\n"
+        "*Podés escribirme lo que necesitás* o elegir un tema y avanzamos.\n\n"
+        "Actualmente puedo ayudarte con:\n\n"
+        "💰 Consultas sobre *préstamos*\n"
+        "📊 Consulta de *situación crediticia*\n"
+        "📍 Búsqueda de *sucursales cercanas*\n"
+        "🎁 Búsqueda de *beneficios*\n"
+        "📄 Análisis de *resúmenes de tarjeta*"
     )
 
 
