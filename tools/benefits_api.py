@@ -687,6 +687,61 @@ def _fetch_live_categories() -> list[str]:
 
 
 def _fetch_live_promotions() -> list[dict[str, Any]]:
+    benefits = _fetch_live_catalog_promotions()
+    if benefits:
+        log_step(
+            "BENEFITS_API",
+            "Promociones obtenidas desde catalogo",
+            {"results": len(benefits)},
+        )
+        return benefits
+
+    log_step(
+        "BENEFITS_API",
+        "Catalogo de promociones vacio; se intenta fallback al carrusel",
+        {},
+    )
+
+    return _fetch_live_carousel_promotions()
+
+
+def _fetch_live_catalog_promotions() -> list[dict[str, Any]]:
+    payload = _fetch_json(
+        "promociones/catalogo",
+        params={},
+    )
+    items = ((payload.get("data") or {}).get("list")) or []
+    if not isinstance(items, list):
+        raise ValueError("La respuesta del catalogo de promociones no contiene una lista valida.")
+
+    promotions: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+
+    for promo in items:
+        if not isinstance(promo, dict):
+            continue
+
+        benefit = _normalize_promotion(promo)
+        dedupe_key = str(benefit.get("id") or "")
+        if not dedupe_key:
+            dedupe_key = "|".join(
+                [
+                    str(benefit.get("comercio") or ""),
+                    str(benefit.get("beneficio") or ""),
+                    str(benefit.get("categoria") or ""),
+                ]
+            )
+
+        if dedupe_key in seen_ids:
+            continue
+
+        seen_ids.add(dedupe_key)
+        promotions.append(benefit)
+
+    return promotions
+
+
+def _fetch_live_carousel_promotions() -> list[dict[str, Any]]:
     page = 1
     total_size: int | None = None
     promotions: list[dict[str, Any]] = []
