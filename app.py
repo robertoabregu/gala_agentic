@@ -12,6 +12,7 @@ from core.bot_runner import BotRuntime, prepare_runtime, run_bot_query
 from core.privacy import mask_sensitive_text
 from memory.local_memory import load_memory, mark_csat_sent, save_memory
 from services.twilio_content import send_whatsapp_content_template
+from services.twilio_messages import send_whatsapp_text_message
 from services.twilio_media import build_media_payload, looks_like_pdf_media
 from services.twilio_typing import send_whatsapp_typing_indicator
 from utils.whatsapp_formatting import format_whatsapp_answer
@@ -150,7 +151,21 @@ def handle_whatsapp_message() -> Response:
             route=result.get("route"),
         )
 
-        if result.get("send_csat"):
+        if result.get("send_csat") and result.get("route") == "goodbye":
+            text_sent = send_whatsapp_text_message(
+                to_number=sender,
+                from_number=recipient,
+                body=formatted_answer,
+            )
+            _send_csat_flow_if_needed(
+                session_id=session_id,
+                sender=sender,
+                recipient=recipient,
+                template_sid=(result.get("csat_template_sid") or "").strip(),
+            )
+            if text_sent:
+                return Response("", status=200, mimetype="text/plain")
+        elif result.get("send_csat"):
             _send_csat_flow_if_needed(
                 session_id=session_id,
                 sender=sender,
