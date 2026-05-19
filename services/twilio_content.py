@@ -4,13 +4,11 @@ import json
 import os
 from typing import Any
 
-import requests
+from twilio.rest import Client
 
 from observability.logger import log_step
 
 
-TWILIO_MESSAGES_TIMEOUT_SECONDS = 5
-MAX_LOGGED_RESPONSE_BODY_CHARS = 300
 DEFAULT_WHATSAPP_CONTENT_VARIABLES = {"1": " "}
 
 
@@ -81,13 +79,14 @@ def send_whatsapp_content_template(
         (os.getenv("TWILIO_PHONE") or "").strip()
         or (from_number or "").strip()
     )
+    twilio_messaging_sid = (os.getenv("TWILIO_MESSAGING_SID") or "").strip()
 
     if not account_sid or not auth_token:
         log_step("TWILIO_CONTENT", "Credenciales Twilio no configuradas")
         return False
 
-    if not twilio_from:
-        log_step("TWILIO_CONTENT", "Numero emisor de Twilio no configurado")
+    if not twilio_messaging_sid and not twilio_from:
+        log_step("TWILIO_CONTENT", "Numero emisor o Messaging Service de Twilio no configurado")
         return False
 
     if not to_number:
@@ -101,22 +100,21 @@ def send_whatsapp_content_template(
     serialized_content_variables = _serialize_content_variables(content_variables)
     content_variable_keys = _get_content_variable_keys(content_variables)
 
-    url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json"
-    payload = {
-        "To": to_number,
-        "From": twilio_from,
-        "ContentSid": content_sid,
-        "ContentVariables": serialized_content_variables,
+    msg_kwargs: dict[str, Any] = {
+        "to": to_number,
+        "content_sid": content_sid,
+        "content_variables": serialized_content_variables,
     }
 
+    if twilio_messaging_sid:
+        msg_kwargs["messaging_service_sid"] = twilio_messaging_sid
+    else:
+        msg_kwargs["from_"] = twilio_from
+
     try:
-        response = requests.post(
-            url,
-            data=payload,
-            auth=(account_sid, auth_token),
-            timeout=TWILIO_MESSAGES_TIMEOUT_SECONDS,
-        )
-    except requests.RequestException as exc:
+        client = Client(account_sid, auth_token)
+        sent_message = client.messages.create(**msg_kwargs)
+    except Exception as exc:
         log_step(
             "TWILIO_CONTENT",
             "Error enviando template CSAT",
@@ -125,36 +123,25 @@ def send_whatsapp_content_template(
                 "error_type": type(exc).__name__,
                 "to": _mask_phone_number(to_number),
                 "from": _mask_phone_number(twilio_from),
+                "messaging_service_sid": twilio_messaging_sid,
                 "content_sid": content_sid,
                 "content_variable_keys": content_variable_keys,
             },
         )
         return False
 
-    if 200 <= response.status_code < 300:
-        log_step(
-            "TWILIO_CONTENT",
-            "Template CSAT enviado",
-            {
-                "status": response.status_code,
-                "to": _mask_phone_number(to_number),
-                "from": _mask_phone_number(twilio_from),
-                "content_sid": content_sid,
-                "content_variable_keys": content_variable_keys,
-            },
-        )
-        return True
-
     log_step(
         "TWILIO_CONTENT",
-        "Twilio rechazo template CSAT",
+        "Template CSAT enviado",
         {
-            "status": response.status_code,
             "to": _mask_phone_number(to_number),
             "from": _mask_phone_number(twilio_from),
+            "messaging_service_sid": twilio_messaging_sid,
             "content_sid": content_sid,
             "content_variable_keys": content_variable_keys,
-            "body": response.text[:MAX_LOGGED_RESPONSE_BODY_CHARS],
+            "status": getattr(sent_message, "status", ""),
+            "error_code": getattr(sent_message, "error_code", None),
+            "error_message": getattr(sent_message, "error_message", None),
         },
     )
-    return False
+    return True
