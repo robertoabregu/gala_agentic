@@ -10,10 +10,12 @@ except ImportError:  # pragma: no cover - fallback solo para tests sin dependenc
 from agents.state import AgentState
 from core.privacy import extract_identification, mask_sensitive_text
 from observability.logger import log_step
+from agents.goodbye import is_goodbye_message
 from services.twilio_media import looks_like_pdf_media
 
 
 VALID_ROUTES = {
+    "goodbye",
     "chitchat",
     "loans_rag",
     "bcra_credit_status",
@@ -638,6 +640,14 @@ def router_node(
             "error": "Pregunta vacia.",
         }
 
+    if is_goodbye_message(routing_question):
+        log_step("ROUTER", "Despedida explicita detectada")
+        return {
+            **state,
+            "route": "goodbye",
+            "error": None,
+        }
+
     if latitude and longitude and (
         pending_route == "branch_locator"
         or last_route == "branch_locator"
@@ -743,12 +753,14 @@ def router_node(
                             "Sos un clasificador de intencion para un chatbot bancario. "
                             "Tu unica tarea es decidir la ruta correcta. "
                             "Responde solamente una de estas palabras: "
-                            "chitchat, loans_rag, bcra_credit_status, branch_locator, benefits, credit_card_statement, fallback, sensitive.\n\n"
+                            "goodbye, chitchat, loans_rag, bcra_credit_status, branch_locator, benefits, credit_card_statement, fallback, sensitive.\n\n"
+                            "Definicion de goodbye: despedidas explicitas del usuario como chau, adios, hasta luego o nos vemos.\n"
                             "Definicion de chitchat: mensajes sociales, saludos, agradecimientos, "
-                            "despedidas, preguntas sobre capacidades del bot, preguntas generales o temas no bancarios fuera del alcance del asistente.\n"
+                            "preguntas sobre capacidades del bot, preguntas generales o temas no bancarios fuera del alcance del asistente.\n"
                             "Definicion de fallback: consultas bancarias o financieras que parecen "
                             "relevantes para Galicia pero que no estan cubiertas por los flujos disponibles.\n"
                             "Usa chitchat para saludos, agradecimientos, charla simple o temas no bancarios.\n"
+                            "Usa goodbye cuando el usuario se despida explicitamente.\n"
                             "Usa loans_rag para consultas sobre prestamos, adelanto de sueldo, "
                             "cuotas de prestamos, precancelacion, prestamos hipotecarios o prendarios.\n"
                             "Usa bcra_credit_status cuando el usuario quiera consultar situacion "
@@ -768,6 +780,8 @@ def router_node(
                             "Ejemplos:\n"
                             "Usuario: que sabes hacer\n"
                             "Intent: chitchat\n"
+                            "Usuario: chau gracias\n"
+                            "Intent: goodbye\n"
                             "Usuario: me podes ayudar a hacer una torta?\n"
                             "Intent: chitchat\n"
                             "Usuario: cuando juega Boca por Libertadores?\n"
