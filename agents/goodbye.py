@@ -8,7 +8,7 @@ from agents.state import AgentState
 from observability.logger import log_step
 
 
-DEFAULT_CSAT_FLOW_TEMPLATE_SID = "HX6e85fd5396aeef5fed1018ceb7c69dbd"
+DEFAULT_CSAT_FLOW_TEMPLATE_SID = "HXc733061137ff39a1b8efb214f86327fa"
 CSAT_FLOW_TEMPLATE_SID = (
     os.getenv("CSAT_FLOW_TEMPLATE_SID", DEFAULT_CSAT_FLOW_TEMPLATE_SID).strip()
     or DEFAULT_CSAT_FLOW_TEMPLATE_SID
