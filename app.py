@@ -1,6 +1,8 @@
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
+from uuid import uuid4
 
 from flask import Flask, Response, jsonify, request
 from twilio.twiml.messaging_response import MessagingResponse
@@ -16,6 +18,9 @@ from utils.whatsapp_formatting import format_whatsapp_answer
 
 app = Flask(__name__)
 _runtime: BotRuntime | None = None
+CSAT_FLOW_TOKEN_VARIABLE_KEY = (
+    (os.getenv("CSAT_FLOW_TOKEN_VARIABLE_KEY") or "").strip() or "1"
+)
 
 
 def get_runtime() -> BotRuntime:
@@ -191,6 +196,7 @@ def _send_csat_flow_if_needed(
             to_number=sender,
             from_number=recipient,
             content_sid=template_sid,
+            content_variables=_build_csat_flow_content_variables(),
         )
     except Exception as exc:  # pragma: no cover - defensa extra
         print("\n[WHATSAPP] Error enviando CSAT")
@@ -212,6 +218,12 @@ def _send_csat_flow_if_needed(
         print("\n[WHATSAPP] Error guardando estado CSAT")
         print(f"  - session_id: {session_id}")
         print(f"  - error: {str(exc)}")
+
+
+def _build_csat_flow_content_variables() -> dict[str, str]:
+    return {
+        CSAT_FLOW_TOKEN_VARIABLE_KEY: uuid4().hex,
+    }
 
 
 if __name__ == "__main__":
