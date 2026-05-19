@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any
 
-from twilio.rest import Client
+import requests
 
 from observability.logger import log_step
 
 
-DEFAULT_WHATSAPP_CONTENT_VARIABLES = {"1": " "}
+TWILIO_MESSAGES_TIMEOUT_SECONDS = 5
+MAX_LOGGED_RESPONSE_BODY_CHARS = 300
 
 
 def _mask_phone_number(value: str | None) -> str:
@@ -19,8 +19,11 @@ def _mask_phone_number(value: str | None) -> str:
     return f"...{digits[-4:]}"
 
 
-def _sanitize_content_variables_dict(content_variables: dict[str, Any]) -> dict[str, str]:
-    sanitized_variables: dict[str, str] = {}
+def _build_content_variables_payload(content_variables: dict | None) -> str | None:
+    if not content_variables:
+        return None
+
+    sanitized_variables = {}
     for key, value in content_variables.items():
         if value is None:
             continue
@@ -31,39 +34,27 @@ def _sanitize_content_variables_dict(content_variables: dict[str, Any]) -> dict[
 
         sanitized_variables[str(key)] = text_value
 
-    return sanitized_variables
+    if not sanitized_variables:
+        return None
+
+    return json.dumps(sanitized_variables, ensure_ascii=False)
 
 
-def _serialize_content_variables(content_variables: dict[str, Any] | str | None) -> str:
-    if isinstance(content_variables, str):
-        stripped_content_variables = content_variables.strip()
-        if stripped_content_variables:
-            return stripped_content_variables
+def _get_content_variable_keys(content_variables: dict | None) -> list[str]:
+    if not content_variables:
+        return []
 
-        return json.dumps(DEFAULT_WHATSAPP_CONTENT_VARIABLES, ensure_ascii=False)
+    keys: list[str] = []
+    for key, value in content_variables.items():
+        if value is None:
+            continue
 
-    if isinstance(content_variables, dict):
-        sanitized_variables = _sanitize_content_variables_dict(content_variables)
-        if sanitized_variables:
-            return json.dumps(sanitized_variables, ensure_ascii=False)
+        if not str(value).strip():
+            continue
 
-    return json.dumps(DEFAULT_WHATSAPP_CONTENT_VARIABLES, ensure_ascii=False)
+        keys.append(str(key))
 
-
-def _get_content_variable_keys(content_variables: dict[str, Any] | str | None) -> list[str]:
-    if isinstance(content_variables, dict):
-        return sorted(_sanitize_content_variables_dict(content_variables).keys())
-
-    if isinstance(content_variables, str):
-        try:
-            parsed = json.loads(content_variables)
-        except json.JSONDecodeError:
-            return []
-
-        if isinstance(parsed, dict):
-            return sorted(_sanitize_content_variables_dict(parsed).keys())
-
-    return sorted(DEFAULT_WHATSAPP_CONTENT_VARIABLES.keys())
+    return sorted(keys)
 
 
 def send_whatsapp_content_template(
@@ -71,7 +62,7 @@ def send_whatsapp_content_template(
     to_number: str,
     content_sid: str,
     from_number: str | None = None,
-    content_variables: dict[str, Any] | str | None = None,
+    content_variables: dict | None = None,
 ) -> bool:
     account_sid = (os.getenv("TWILIO_ACCOUNT_SID") or "").strip()
     auth_token = (os.getenv("TWILIO_AUTH_TOKEN") or "").strip()
@@ -79,14 +70,13 @@ def send_whatsapp_content_template(
         (os.getenv("TWILIO_PHONE") or "").strip()
         or (from_number or "").strip()
     )
-    twilio_messaging_sid = (os.getenv("TWILIO_MESSAGING_SID") or "").strip()
 
     if not account_sid or not auth_token:
         log_step("TWILIO_CONTENT", "Credenciales Twilio no configuradas")
         return False
 
-    if not twilio_messaging_sid and not twilio_from:
-        log_step("TWILIO_CONTENT", "Numero emisor o Messaging Service de Twilio no configurado")
+    if not twilio_from:
+        log_step("TWILIO_CONTENT", "Numero emisor de Twilio no configurado")
         return False
 
     if not to_number:
@@ -97,51 +87,61 @@ def send_whatsapp_content_template(
         log_step("TWILIO_CONTENT", "ContentSid ausente para template")
         return False
 
-    serialized_content_variables = _serialize_content_variables(content_variables)
-    content_variable_keys = _get_content_variable_keys(content_variables)
-
-    msg_kwargs: dict[str, Any] = {
-        "to": to_number,
-        "content_sid": content_sid,
-        "content_variables": serialized_content_variables,
+    url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json"
+    payload = {
+        "To": to_number,
+        "From": twilio_from,
+        "ContentSid": content_sid,
     }
-
-    if twilio_messaging_sid:
-        msg_kwargs["messaging_service_sid"] = twilio_messaging_sid
-    else:
-        msg_kwargs["from_"] = twilio_from
+    serialized_content_variables = _build_content_variables_payload(content_variables)
+    content_variable_keys = _get_content_variable_keys(content_variables)
+    if serialized_content_variables is not None:
+        payload["ContentVariables"] = serialized_content_variables
 
     try:
-        client = Client(account_sid, auth_token)
-        sent_message = client.messages.create(**msg_kwargs)
-    except Exception as exc:
+        response = requests.post(
+            url,
+            data=payload,
+            auth=(account_sid, auth_token),
+            timeout=TWILIO_MESSAGES_TIMEOUT_SECONDS,
+        )
+    except requests.RequestException as exc:
         log_step(
             "TWILIO_CONTENT",
             "Error enviando template CSAT",
             {
                 "error": str(exc),
-                "error_type": type(exc).__name__,
                 "to": _mask_phone_number(to_number),
                 "from": _mask_phone_number(twilio_from),
-                "messaging_service_sid": twilio_messaging_sid,
                 "content_sid": content_sid,
                 "content_variable_keys": content_variable_keys,
             },
         )
         return False
 
+    if 200 <= response.status_code < 300:
+        log_step(
+            "TWILIO_CONTENT",
+            "Template CSAT enviado",
+            {
+                "to": _mask_phone_number(to_number),
+                "from": _mask_phone_number(twilio_from),
+                "content_sid": content_sid,
+                "content_variable_keys": content_variable_keys,
+            },
+        )
+        return True
+
     log_step(
         "TWILIO_CONTENT",
-        "Template CSAT enviado",
+        "Twilio rechazo template CSAT",
         {
+            "status": response.status_code,
             "to": _mask_phone_number(to_number),
             "from": _mask_phone_number(twilio_from),
-            "messaging_service_sid": twilio_messaging_sid,
             "content_sid": content_sid,
             "content_variable_keys": content_variable_keys,
-            "status": getattr(sent_message, "status", ""),
-            "error_code": getattr(sent_message, "error_code", None),
-            "error_message": getattr(sent_message, "error_message", None),
+            "body": response.text[:MAX_LOGGED_RESPONSE_BODY_CHARS],
         },
     )
-    return True
+    return False
