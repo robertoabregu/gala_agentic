@@ -1,5 +1,4 @@
 import re
-from datetime import datetime, timezone
 from pathlib import PurePosixPath
 
 from flask import Flask, Response, jsonify, request
@@ -7,8 +6,6 @@ from twilio.twiml.messaging_response import MessagingResponse
 
 from core.bot_runner import BotRuntime, prepare_runtime, run_bot_query
 from core.privacy import mask_sensitive_text
-from memory.local_memory import load_memory, mark_csat_sent, save_memory
-from services.twilio_content import send_whatsapp_content_template
 from services.twilio_media import build_media_payload, looks_like_pdf_media
 from services.twilio_typing import send_whatsapp_typing_indicator
 from utils.whatsapp_formatting import format_whatsapp_answer
@@ -84,7 +81,6 @@ def health() -> Response:
 def handle_whatsapp_message() -> Response:
     body = (request.form.get("Body") or "").strip()
     sender = (request.form.get("From") or "").strip()
-    recipient = (request.form.get("To") or "").strip()
     message_sid = (request.form.get("MessageSid") or "").strip()
     session_id = sanitize_whatsapp_session_id(sender)
 
@@ -145,14 +141,6 @@ def handle_whatsapp_message() -> Response:
             route=result.get("route"),
         )
 
-        if result.get("send_csat"):
-            _send_csat_flow_if_needed(
-                session_id=session_id,
-                sender=sender,
-                recipient=recipient,
-                template_sid=(result.get("csat_template_sid") or "").strip(),
-            )
-
         return twiml_message(formatted_answer)
 
     except Exception as exc:
@@ -173,45 +161,6 @@ def whatsapp_webhook() -> Response:
 @app.post("/webhook")
 def webhook_alias() -> Response:
     return handle_whatsapp_message()
-
-
-def _send_csat_flow_if_needed(
-    *,
-    session_id: str,
-    sender: str,
-    recipient: str,
-    template_sid: str,
-) -> None:
-    try:
-        memory = load_memory(session_id)
-        if memory.get("csat_sent"):
-            return
-
-        sent = send_whatsapp_content_template(
-            to_number=sender,
-            from_number=recipient,
-            content_sid=template_sid,
-        )
-    except Exception as exc:  # pragma: no cover - defensa extra
-        print("\n[WHATSAPP] Error enviando CSAT")
-        print(f"  - session_id: {session_id}")
-        print(f"  - error: {str(exc)}")
-        return
-
-    if not sent:
-        return
-
-    try:
-        updated_memory = mark_csat_sent(
-            memory,
-            template_sid=template_sid,
-            sent_at=datetime.now(timezone.utc).isoformat(),
-        )
-        save_memory(session_id, updated_memory)
-    except Exception as exc:  # pragma: no cover - defensa extra
-        print("\n[WHATSAPP] Error guardando estado CSAT")
-        print(f"  - session_id: {session_id}")
-        print(f"  - error: {str(exc)}")
 
 
 if __name__ == "__main__":

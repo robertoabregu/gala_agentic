@@ -8,7 +8,6 @@ from observability.logger import log_step
 
 
 TOPIC_BY_ROUTE = {
-    "goodbye": "despedida",
     "loans_rag": "prestamos",
     "rag": "prestamos",
     "bcra_credit_status": "situacion_crediticia_bcra",
@@ -82,7 +81,6 @@ def save_memory_node(state: AgentState) -> AgentState:
             "last_route": updated_memory.get("last_route", ""),
             "last_topic": updated_memory.get("last_topic", ""),
             "has_credit_card_statement": bool(updated_memory.get("credit_card_statement")),
-            "csat_sent": bool(updated_memory.get("csat_sent")),
         },
     )
 
