@@ -1,3 +1,4 @@
+import json
 import os
 import re
 from datetime import datetime, timezone
@@ -18,9 +19,8 @@ from utils.whatsapp_formatting import format_whatsapp_answer
 
 app = Flask(__name__)
 _runtime: BotRuntime | None = None
-CSAT_FLOW_TOKEN_VARIABLE_KEY = (
-    (os.getenv("CSAT_FLOW_TOKEN_VARIABLE_KEY") or "").strip() or "1"
-)
+CSAT_FLOW_CONTENT_VARIABLES_JSON = os.getenv("CSAT_FLOW_CONTENT_VARIABLES_JSON")
+CSAT_FLOW_TOKEN_PLACEHOLDER = "__FLOW_TOKEN__"
 
 
 def get_runtime() -> BotRuntime:
@@ -221,9 +221,36 @@ def _send_csat_flow_if_needed(
 
 
 def _build_csat_flow_content_variables() -> dict[str, str]:
-    return {
-        CSAT_FLOW_TOKEN_VARIABLE_KEY: uuid4().hex,
-    }
+    if CSAT_FLOW_CONTENT_VARIABLES_JSON is not None:
+        raw_content_variables = CSAT_FLOW_CONTENT_VARIABLES_JSON.strip()
+        if not raw_content_variables:
+            return {}
+
+        try:
+            parsed_content_variables = json.loads(raw_content_variables)
+        except json.JSONDecodeError as exc:
+            print("\n[WHATSAPP] Error parseando CSAT_FLOW_CONTENT_VARIABLES_JSON")
+            print(f"  - error: {str(exc)}")
+        else:
+            if isinstance(parsed_content_variables, dict):
+                built_content_variables: dict[str, str] = {}
+                for key, value in parsed_content_variables.items():
+                    if value is None:
+                        continue
+
+                    text_value = str(value).strip()
+                    if not text_value:
+                        continue
+
+                    built_content_variables[str(key)] = (
+                        uuid4().hex
+                        if text_value == CSAT_FLOW_TOKEN_PLACEHOLDER
+                        else text_value
+                    )
+
+                return built_content_variables
+
+    return {}
 
 
 if __name__ == "__main__":

@@ -40,6 +40,23 @@ def _build_content_variables_payload(content_variables: dict | None) -> str | No
     return json.dumps(sanitized_variables, ensure_ascii=False)
 
 
+def _get_content_variable_keys(content_variables: dict | None) -> list[str]:
+    if not content_variables:
+        return []
+
+    keys: list[str] = []
+    for key, value in content_variables.items():
+        if value is None:
+            continue
+
+        if not str(value).strip():
+            continue
+
+        keys.append(str(key))
+
+    return sorted(keys)
+
+
 def send_whatsapp_content_template(
     *,
     to_number: str,
@@ -77,6 +94,7 @@ def send_whatsapp_content_template(
         "ContentSid": content_sid,
     }
     serialized_content_variables = _build_content_variables_payload(content_variables)
+    content_variable_keys = _get_content_variable_keys(content_variables)
     if serialized_content_variables is not None:
         payload["ContentVariables"] = serialized_content_variables
 
@@ -96,6 +114,7 @@ def send_whatsapp_content_template(
                 "to": _mask_phone_number(to_number),
                 "from": _mask_phone_number(twilio_from),
                 "content_sid": content_sid,
+                "content_variable_keys": content_variable_keys,
             },
         )
         return False
@@ -108,6 +127,7 @@ def send_whatsapp_content_template(
                 "to": _mask_phone_number(to_number),
                 "from": _mask_phone_number(twilio_from),
                 "content_sid": content_sid,
+                "content_variable_keys": content_variable_keys,
             },
         )
         return True
@@ -120,6 +140,7 @@ def send_whatsapp_content_template(
             "to": _mask_phone_number(to_number),
             "from": _mask_phone_number(twilio_from),
             "content_sid": content_sid,
+            "content_variable_keys": content_variable_keys,
             "body": response.text[:MAX_LOGGED_RESPONSE_BODY_CHARS],
         },
     )
