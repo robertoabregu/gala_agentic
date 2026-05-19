@@ -19,6 +19,27 @@ def _mask_phone_number(value: str | None) -> str:
     return f"...{digits[-4:]}"
 
 
+def _build_content_variables_payload(content_variables: dict | None) -> str | None:
+    if not content_variables:
+        return None
+
+    sanitized_variables = {}
+    for key, value in content_variables.items():
+        if value is None:
+            continue
+
+        text_value = str(value).strip()
+        if not text_value:
+            continue
+
+        sanitized_variables[str(key)] = text_value
+
+    if not sanitized_variables:
+        return None
+
+    return json.dumps(sanitized_variables, ensure_ascii=False)
+
+
 def send_whatsapp_content_template(
     *,
     to_number: str,
@@ -54,8 +75,10 @@ def send_whatsapp_content_template(
         "To": to_number,
         "From": twilio_from,
         "ContentSid": content_sid,
-        "ContentVariables": json.dumps(content_variables or {}, ensure_ascii=False),
     }
+    serialized_content_variables = _build_content_variables_payload(content_variables)
+    if serialized_content_variables is not None:
+        payload["ContentVariables"] = serialized_content_variables
 
     try:
         response = requests.post(
