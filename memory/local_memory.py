@@ -17,9 +17,6 @@ DEFAULT_MEMORY = {
     "last_topic": "",
     "updated_at": "",
     "credit_card_statement": {},
-    "csat_sent": False,
-    "csat_sent_at": "",
-    "csat_template_sid": "",
 }
 
 
@@ -96,20 +93,6 @@ def _normalize_memory(memory: dict[str, Any] | None) -> dict[str, Any]:
         else {}
     )
 
-    normalized["csat_sent"] = bool(normalized.get("csat_sent"))
-
-    normalized["csat_sent_at"] = (
-        normalized["csat_sent_at"]
-        if isinstance(normalized.get("csat_sent_at"), str)
-        else ""
-    )
-
-    normalized["csat_template_sid"] = (
-        normalized["csat_template_sid"]
-        if isinstance(normalized.get("csat_template_sid"), str)
-        else ""
-    )
-
     return normalized
 
 
@@ -152,17 +135,4 @@ def set_pending(
     updated_memory = _normalize_memory(memory)
     updated_memory["pending_route"] = route or ""
     updated_memory["missing_fields"] = [str(field) for field in missing_fields]
-    return updated_memory
-
-
-def mark_csat_sent(
-    memory: dict[str, Any],
-    *,
-    template_sid: str,
-    sent_at: str,
-) -> dict[str, Any]:
-    updated_memory = _normalize_memory(memory)
-    updated_memory["csat_sent"] = True
-    updated_memory["csat_sent_at"] = sent_at
-    updated_memory["csat_template_sid"] = template_sid
     return updated_memory

@@ -5,7 +5,6 @@ from agents.state import AgentState
 from agents.contextualizer import contextualizer_node
 from agents.router import router_node
 from agents.chitchat import chitchat_node
-from agents.goodbye import goodbye_node
 from agents.query_rewriter import query_rewriter_node
 from agents.retriever_node import retriever_node
 from agents.answer import answer_node
@@ -61,9 +60,6 @@ def build_graph(client, retriever, top_k, score_threshold, chat_model):
     def chitchat_wrapper(state: AgentState):
         return chitchat_node(state=state)
 
-    def goodbye_wrapper(state: AgentState):
-        return goodbye_node(state=state)
-
     def bcra_agent_wrapper(state: AgentState):
         return bcra_agent_node(
             state=state,
@@ -84,7 +80,6 @@ def build_graph(client, retriever, top_k, score_threshold, chat_model):
 
     graph.add_node("contextualizer", contextualizer_wrapper)
     graph.add_node("router", router_wrapper)
-    graph.add_node("goodbye", goodbye_wrapper)
     graph.add_node("chitchat_answer", chitchat_wrapper)
     graph.add_node("query_rewriter", query_rewriter_wrapper)
     graph.add_node("retriever", retriever_wrapper)
@@ -103,7 +98,6 @@ def build_graph(client, retriever, top_k, score_threshold, chat_model):
         "router",
         lambda state: state["route"],
         {
-            "goodbye": "goodbye",
             "chitchat": "chitchat_answer",
             "rag": "query_rewriter",
             "loans_rag": "query_rewriter",
@@ -116,7 +110,6 @@ def build_graph(client, retriever, top_k, score_threshold, chat_model):
         },
     )
 
-    graph.add_edge("goodbye", "guardrail")
     graph.add_edge("chitchat_answer", "guardrail")
     graph.add_edge("query_rewriter", "retriever")
     graph.add_edge("retriever", "answer")

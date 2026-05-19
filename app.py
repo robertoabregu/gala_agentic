@@ -1,18 +1,11 @@
-import json
-import os
 import re
-from datetime import datetime, timezone
 from pathlib import PurePosixPath
-from uuid import uuid4
 
 from flask import Flask, Response, jsonify, request
 from twilio.twiml.messaging_response import MessagingResponse
 
 from core.bot_runner import BotRuntime, prepare_runtime, run_bot_query
 from core.privacy import mask_sensitive_text
-from memory.local_memory import load_memory, mark_csat_sent, save_memory
-from services.twilio_content import send_whatsapp_content_template
-from services.twilio_messages import send_whatsapp_text_message
 from services.twilio_media import build_media_payload, looks_like_pdf_media
 from services.twilio_typing import send_whatsapp_typing_indicator
 from utils.whatsapp_formatting import format_whatsapp_answer
@@ -20,8 +13,6 @@ from utils.whatsapp_formatting import format_whatsapp_answer
 
 app = Flask(__name__)
 _runtime: BotRuntime | None = None
-CSAT_FLOW_CONTENT_VARIABLES_JSON = os.getenv("CSAT_FLOW_CONTENT_VARIABLES_JSON")
-CSAT_FLOW_TOKEN_PLACEHOLDER = "__FLOW_TOKEN__"
 
 
 def get_runtime() -> BotRuntime:
@@ -90,7 +81,6 @@ def health() -> Response:
 def handle_whatsapp_message() -> Response:
     body = (request.form.get("Body") or "").strip()
     sender = (request.form.get("From") or "").strip()
-    recipient = (request.form.get("To") or "").strip()
     message_sid = (request.form.get("MessageSid") or "").strip()
     session_id = sanitize_whatsapp_session_id(sender)
 
@@ -151,28 +141,6 @@ def handle_whatsapp_message() -> Response:
             route=result.get("route"),
         )
 
-        if result.get("send_csat") and result.get("route") == "goodbye":
-            text_sent = send_whatsapp_text_message(
-                to_number=sender,
-                from_number=recipient,
-                body=formatted_answer,
-            )
-            _send_csat_flow_if_needed(
-                session_id=session_id,
-                sender=sender,
-                recipient=recipient,
-                template_sid=(result.get("csat_template_sid") or "").strip(),
-            )
-            if text_sent:
-                return Response("", status=200, mimetype="text/plain")
-        elif result.get("send_csat"):
-            _send_csat_flow_if_needed(
-                session_id=session_id,
-                sender=sender,
-                recipient=recipient,
-                template_sid=(result.get("csat_template_sid") or "").strip(),
-            )
-
         return twiml_message(formatted_answer)
 
     except Exception as exc:
@@ -193,79 +161,6 @@ def whatsapp_webhook() -> Response:
 @app.post("/webhook")
 def webhook_alias() -> Response:
     return handle_whatsapp_message()
-
-
-def _send_csat_flow_if_needed(
-    *,
-    session_id: str,
-    sender: str,
-    recipient: str,
-    template_sid: str,
-) -> None:
-    try:
-        memory = load_memory(session_id)
-        if memory.get("csat_sent"):
-            return
-
-        sent = send_whatsapp_content_template(
-            to_number=sender,
-            from_number=recipient,
-            content_sid=template_sid,
-            content_variables=_build_csat_flow_content_variables(),
-        )
-    except Exception as exc:  # pragma: no cover - defensa extra
-        print("\n[WHATSAPP] Error enviando CSAT")
-        print(f"  - session_id: {session_id}")
-        print(f"  - error: {str(exc)}")
-        return
-
-    if not sent:
-        return
-
-    try:
-        updated_memory = mark_csat_sent(
-            memory,
-            template_sid=template_sid,
-            sent_at=datetime.now(timezone.utc).isoformat(),
-        )
-        save_memory(session_id, updated_memory)
-    except Exception as exc:  # pragma: no cover - defensa extra
-        print("\n[WHATSAPP] Error guardando estado CSAT")
-        print(f"  - session_id: {session_id}")
-        print(f"  - error: {str(exc)}")
-
-
-def _build_csat_flow_content_variables() -> dict[str, str]:
-    if CSAT_FLOW_CONTENT_VARIABLES_JSON is not None:
-        raw_content_variables = CSAT_FLOW_CONTENT_VARIABLES_JSON.strip()
-        if not raw_content_variables:
-            return {}
-
-        try:
-            parsed_content_variables = json.loads(raw_content_variables)
-        except json.JSONDecodeError as exc:
-            print("\n[WHATSAPP] Error parseando CSAT_FLOW_CONTENT_VARIABLES_JSON")
-            print(f"  - error: {str(exc)}")
-        else:
-            if isinstance(parsed_content_variables, dict):
-                built_content_variables: dict[str, str] = {}
-                for key, value in parsed_content_variables.items():
-                    if value is None:
-                        continue
-
-                    text_value = str(value).strip()
-                    if not text_value:
-                        continue
-
-                    built_content_variables[str(key)] = (
-                        uuid4().hex
-                        if text_value == CSAT_FLOW_TOKEN_PLACEHOLDER
-                        else text_value
-                    )
-
-                return built_content_variables
-
-    return {}
 
 
 if __name__ == "__main__":

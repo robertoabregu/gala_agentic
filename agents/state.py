@@ -25,5 +25,3 @@ class AgentState(TypedDict):
     user_location: NotRequired[Dict[str, Any]]
     media: NotRequired[Dict[str, Any]]
     credit_card_statement: NotRequired[Dict[str, Any]]
-    send_csat: NotRequired[bool]
-    csat_template_sid: NotRequired[str]
