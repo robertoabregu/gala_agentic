@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import unittest
+import importlib
+import sys
+import types
 from unittest.mock import patch
 
 from agents.benefits import benefits_node
+from agents.contextualizer import contextualizer_node
 from agents.router import router_node
 from services.benefits_ranker import rank_locales
 
@@ -14,6 +18,19 @@ class RouterFallbackLLM:
             content = "chitchat"
 
         return Response()
+
+
+class ExplodingLLM:
+    def invoke(self, *_args, **_kwargs):
+        raise AssertionError("No deberia invocarse el LLM en este caso")
+
+
+def _load_build_initial_state():
+    fake_faiss = types.ModuleType("faiss")
+    with patch.dict(sys.modules, {"faiss": fake_faiss}):
+        sys.modules.pop("core.bot_runner", None)
+        module = importlib.import_module("core.bot_runner")
+    return module.build_initial_state
 
 
 def _base_state(question: str, **overrides):
@@ -54,7 +71,10 @@ class BenefitsFlowTests(unittest.TestCase):
             _base_state(
                 "Ubicacion compartida por WhatsApp",
                 pending_route="benefits",
-                memory={"pending_route": "benefits"},
+                memory={
+                    "pending_route": "benefits",
+                    "pending_query": "beneficios en supermercados",
+                },
                 user_location={"latitude": "-34.5", "longitude": "-58.4"},
             ),
             llm=RouterFallbackLLM(),
@@ -69,7 +89,7 @@ class BenefitsFlowTests(unittest.TestCase):
                 {
                     "local_id": 1,
                     "brand": "Burger Place",
-                    "category": "Gastronomía",
+                    "category": "Gastronomia",
                     "distance_km": 0.1,
                 },
                 {
@@ -106,7 +126,7 @@ class BenefitsFlowTests(unittest.TestCase):
                     "distance_km": 0.2,
                 },
             ],
-            query="zapatillas para mi papá",
+            query="zapatillas para mi papa",
         )
 
         self.assertEqual(ranked[0]["category"], "Indumentaria")
@@ -296,7 +316,7 @@ class BenefitsFlowTests(unittest.TestCase):
             {
                 "local_id": 40,
                 "brand": "Mcdonalds",
-                "category": "Gastronomía",
+                "category": "Gastronomia",
                 "distance_km": 4.0,
                 "city": "Tigre",
                 "province": "Buenos Aires",
@@ -331,8 +351,8 @@ class BenefitsFlowTests(unittest.TestCase):
 
     def test_router_regression_for_other_routes(self) -> None:
         cases = [
-            ("Quiero saber sobre préstamos personales", "loans_rag"),
-            ("Necesito ver mi situación crediticia", "bcra_credit_status"),
+            ("Quiero saber sobre prestamos personales", "loans_rag"),
+            ("Necesito ver mi situacion crediticia", "bcra_credit_status"),
             ("Necesito una sucursal cercana", "branch_locator"),
             ("Quiero analizar mi resumen de tarjeta", "credit_card_statement"),
             ("hola", "chitchat"),
@@ -342,6 +362,87 @@ class BenefitsFlowTests(unittest.TestCase):
             with self.subTest(question=question):
                 result = router_node(_base_state(question), llm=RouterFallbackLLM())
                 self.assertEqual(result["route"], expected_route)
+
+    def test_router_routes_commerce_query_to_benefits(self) -> None:
+        result = router_node(
+            _base_state("donde puedo comprar botines de futbol cerca"),
+            llm=RouterFallbackLLM(),
+        )
+
+        self.assertEqual(result["route"], "benefits")
+
+    def test_contextualizer_uses_pending_query_on_location_handoff(self) -> None:
+        original_query = (
+            "estoy pensando en comprarle a mi papá unas zapatillas para jugar al padel "
+            "para el día del padre, hay alguna promo que pueda aprovechar?"
+        )
+        result = contextualizer_node(
+            _base_state(
+                "Ubicacion compartida por WhatsApp",
+                pending_route="benefits",
+                memory={
+                    "pending_route": "benefits",
+                    "pending_query": original_query,
+                    "last_user_question": original_query,
+                    "last_assistant_answer": "pasame tu ubicacion",
+                },
+                user_location={"latitude": "-34.5", "longitude": "-58.4"},
+            ),
+            llm=ExplodingLLM(),
+        )
+
+        self.assertEqual(result["standalone_question"], original_query)
+        self.assertTrue(result["is_followup"])
+
+    @patch("agents.benefits.get_nearby_locales", return_value=[])
+    def test_benefits_uses_pending_query_when_location_is_received(self, nearby_mock) -> None:
+        original_query = (
+            "estoy pensando en comprarle a mi papá unas zapatillas para jugar al padel "
+            "para el día del padre, hay alguna promo que pueda aprovechar?"
+        )
+        result = benefits_node(
+            _base_state(
+                "Ubicacion compartida por WhatsApp",
+                memory={
+                    "pending_route": "benefits",
+                    "pending_query": original_query,
+                },
+                user_location={"latitude": "-34.45", "longitude": "-58.55"},
+            )
+        )
+
+        self.assertEqual(result["tool_input"]["resolved_query"], original_query)
+        nearby_mock.assert_called_once()
+
+    def test_build_initial_state_reuses_persisted_location(self) -> None:
+        build_initial_state = _load_build_initial_state()
+        with patch("core.bot_runner.load_memory") as load_memory_mock:
+            load_memory_mock.return_value = {
+                "pending_route": "",
+                "pending_query": "",
+                "missing_fields": [],
+                "last_route": "",
+                "last_user_question": "",
+                "last_assistant_answer": "",
+                "last_topic": "",
+                "updated_at": "",
+                "credit_card_statement": {},
+                "user_location": {
+                    "latitude": "-34.45",
+                    "longitude": "-58.55",
+                    "address": "San Fernando",
+                    "label": "Casa",
+                },
+            }
+
+            initial_state = build_initial_state(
+                question="supermercados cerca",
+                session_id="demo",
+                user_location={},
+            )
+
+        self.assertEqual(initial_state["user_location"]["latitude"], "-34.45")
+        self.assertEqual(initial_state["user_location"]["longitude"], "-58.55")
 
 
 if __name__ == "__main__":

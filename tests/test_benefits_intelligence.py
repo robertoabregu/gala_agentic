@@ -89,7 +89,7 @@ class BenefitsIntelligenceTests(unittest.TestCase):
     def test_active_commercial_context_is_empty_when_not_nearby(self) -> None:
         context = get_active_commercial_context(
             reference_date=date(2026, 8, 5),
-            categories=["Indumentaria"],
+            categories=["VehÃ­culos"],
         )
 
         self.assertIsNone(context["active_occasion"])
