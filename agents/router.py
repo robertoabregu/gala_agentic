@@ -639,6 +639,25 @@ def router_node(
         }
 
     if latitude and longitude and (
+        pending_route == "benefits"
+    ):
+        log_step(
+            "ROUTER",
+            "Ubicacion recibida para benefits",
+            {
+                "pending_route": pending_route,
+                "last_route": last_route,
+                "last_topic": last_topic,
+            },
+        )
+        return {
+            **state,
+            "route": "benefits",
+            "pending_route": "",
+            "error": None,
+        }
+
+    if latitude and longitude and (
         pending_route == "branch_locator"
         or last_route == "branch_locator"
         or last_topic == "sucursales_cercanas"
@@ -684,7 +703,7 @@ def router_node(
             "error": None,
         }
 
-    if pending_route in {"bcra_credit_status", "branch_locator", "credit_card_statement"}:
+    if pending_route in {"bcra_credit_status", "branch_locator", "benefits", "credit_card_statement"}:
         log_step(
             "ROUTER",
             "Ruta recuperada desde memoria local",
