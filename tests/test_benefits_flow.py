@@ -92,6 +92,118 @@ class BenefitsFlowTests(unittest.TestCase):
         self.assertEqual(result["route"], "benefits")
         self.assertEqual(result["pending_route"], "")
 
+    def test_router_routes_branch_locator_when_new_location_arrives(self) -> None:
+        result = router_node(
+            _base_state(
+                "Ubicacion compartida por WhatsApp",
+                memory={
+                    "last_route": "branch_locator",
+                    "last_topic": "sucursales_cercanas",
+                },
+                user_location={"latitude": "-34.5", "longitude": "-58.4"},
+            ),
+            llm=RouterFallbackLLM(),
+        )
+
+        self.assertEqual(result["route"], "branch_locator")
+
+    def test_router_does_not_stick_to_benefits_with_pending_route(self) -> None:
+        result = router_node(
+            _base_state(
+                "hola",
+                pending_route="benefits",
+                memory={
+                    "pending_route": "benefits",
+                    "missing_fields": ["user_location"],
+                },
+            ),
+            llm=RouterFallbackLLM(),
+        )
+
+        self.assertEqual(result["route"], "chitchat")
+
+    def test_router_does_not_stick_to_branch_locator_with_pending_route(self) -> None:
+        result = router_node(
+            _base_state(
+                "hola",
+                pending_route="branch_locator",
+                memory={
+                    "pending_route": "branch_locator",
+                    "missing_fields": ["user_location"],
+                },
+                user_location={"latitude": "-34.5", "longitude": "-58.4"},
+            ),
+            llm=RouterFallbackLLM(),
+        )
+
+        self.assertEqual(result["route"], "chitchat")
+
+    def test_router_does_not_stick_to_branch_locator_with_persisted_location(self) -> None:
+        result = router_node(
+            _base_state(
+                "hola",
+                memory={
+                    "last_route": "branch_locator",
+                    "last_topic": "sucursales_cercanas",
+                },
+                user_location={"latitude": "-34.5", "longitude": "-58.4"},
+            ),
+            llm=RouterFallbackLLM(),
+        )
+
+        self.assertEqual(result["route"], "chitchat")
+
+    def test_router_does_not_stick_to_bcra_with_pending_route(self) -> None:
+        result = router_node(
+            _base_state(
+                "hola",
+                pending_route="bcra_credit_status",
+                memory={
+                    "pending_route": "bcra_credit_status",
+                    "missing_fields": ["identificacion"],
+                    "last_route": "bcra_credit_status",
+                    "last_topic": "situacion_crediticia_bcra",
+                },
+            ),
+            llm=RouterFallbackLLM(),
+        )
+
+        self.assertEqual(result["route"], "chitchat")
+
+    def test_router_does_not_stick_to_credit_card_statement_with_pending_route(self) -> None:
+        result = router_node(
+            _base_state(
+                "hola",
+                pending_route="credit_card_statement",
+                memory={
+                    "pending_route": "credit_card_statement",
+                    "missing_fields": ["pdf"],
+                },
+            ),
+            llm=RouterFallbackLLM(),
+        )
+
+        self.assertEqual(result["route"], "chitchat")
+
+    def test_router_routes_credit_card_statement_when_attachment_arrives_for_pending_pdf(self) -> None:
+        result = router_node(
+            _base_state(
+                "Archivo adjunto enviado",
+                pending_route="credit_card_statement",
+                memory={
+                    "pending_route": "credit_card_statement",
+                    "missing_fields": ["pdf"],
+                },
+                media={
+                    "content_type": "image/jpeg",
+                    "filename": "foto.jpg",
+                },
+            ),
+            llm=RouterFallbackLLM(),
+        )
+
+        self.assertEqual(result["route"], "credit_card_statement")
+
     def test_rank_locales_prioritizes_supermarkets(self) -> None:
         ranked = rank_locales(
             [
