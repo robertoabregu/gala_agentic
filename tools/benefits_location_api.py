@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import copy
 import os
 import re
+import threading
+import time
 import unicodedata
 from datetime import datetime
 from typing import Any
@@ -19,6 +22,10 @@ REQUEST_HEADERS = {
     "Referer": "https://beneficios.galicia.ar/",
     "User-Agent": "Mozilla/5.0",
 }
+
+_NEARBY_LOCALES_CACHE: dict[tuple[Any, ...], dict[str, Any]] = {}
+_LOCAL_DETAIL_CACHE: dict[tuple[Any, ...], dict[str, Any]] = {}
+_CACHE_LOCK = threading.Lock()
 
 
 def _get_int_env(name: str, default: int) -> int:
@@ -46,6 +53,18 @@ def _request_timeout() -> float:
     return max(1.0, _get_float_env("BENEFITS_REQUEST_TIMEOUT", 8))
 
 
+def _nearby_cache_ttl_seconds() -> int:
+    return max(1, _get_int_env("BENEFITS_NEARBY_CACHE_TTL_SECONDS", 180))
+
+
+def _detail_cache_ttl_seconds() -> int:
+    return max(1, _get_int_env("BENEFITS_DETAIL_CACHE_TTL_SECONDS", 600))
+
+
+def _cache_round_decimals() -> int:
+    return max(1, _get_int_env("BENEFITS_LOCATION_CACHE_ROUND_DECIMALS", 3))
+
+
 def _default_page_size() -> int:
     return max(1, _get_int_env("BENEFITS_LOCALES_PAGE_SIZE", 1500))
 
@@ -67,23 +86,43 @@ def get_nearby_locales(
     distance_from_km: float | None = None,
     distance_to_km: float | None = None,
 ) -> list[dict[str, Any]]:
+    effective_page_size = page_size if page_size is not None else _default_page_size()
+    effective_distance_from = (
+        distance_from_km
+        if distance_from_km is not None
+        else _default_distance_from_km()
+    )
+    effective_distance_to = (
+        distance_to_km
+        if distance_to_km is not None
+        else _default_distance_to_km()
+    )
+    cache_key = _build_nearby_cache_key(
+        latitude=latitude,
+        longitude=longitude,
+        page=page,
+        page_size=effective_page_size,
+        distance_from_km=effective_distance_from,
+        distance_to_km=effective_distance_to,
+    )
+    cached_locales = _read_cache(
+        _NEARBY_LOCALES_CACHE,
+        cache_key,
+        ttl_seconds=_nearby_cache_ttl_seconds(),
+        cache_name="nearby_locales",
+    )
+    if cached_locales is not None:
+        return cached_locales
+
     payload = _fetch_json(
         "locales/fisicos",
         params={
             "page": max(1, page),
-            "pageSize": page_size if page_size is not None else _default_page_size(),
+            "pageSize": effective_page_size,
             "ClienteLatitud": latitude,
             "ClienteLongitud": longitude,
-            "DistanciaDesde": (
-                distance_from_km
-                if distance_from_km is not None
-                else _default_distance_from_km()
-            ),
-            "DistanciaHasta": (
-                distance_to_km
-                if distance_to_km is not None
-                else _default_distance_to_km()
-            ),
+            "DistanciaDesde": effective_distance_from,
+            "DistanciaHasta": effective_distance_to,
         },
     )
 
@@ -101,10 +140,26 @@ def get_nearby_locales(
         locales.append(normalized_local)
 
     log_step("BENEFITS_LOCATION_API", "Locales cercanos obtenidos", {"results": len(locales)})
+    _write_cache(
+        _NEARBY_LOCALES_CACHE,
+        cache_key,
+        locales,
+        cache_name="nearby_locales",
+    )
     return locales
 
 
 def get_local_promotions_detail(local_id: int | str) -> dict[str, Any]:
+    cache_key = ("local_detail", str(local_id).strip())
+    cached_detail = _read_cache(
+        _LOCAL_DETAIL_CACHE,
+        cache_key,
+        ttl_seconds=_detail_cache_ttl_seconds(),
+        cache_name="local_detail",
+    )
+    if cached_detail is not None:
+        return cached_detail
+
     payload = _fetch_json(f"promociones/local/{local_id}", params=None)
     detail = _extract_detail_dict(payload)
     if not isinstance(detail, dict):
@@ -118,6 +173,12 @@ def get_local_promotions_detail(local_id: int | str) -> dict[str, Any]:
             "local_id": normalized_detail.get("local_id"),
             "promotions": len(normalized_detail.get("promotions") or []),
         },
+    )
+    _write_cache(
+        _LOCAL_DETAIL_CACHE,
+        cache_key,
+        normalized_detail,
+        cache_name="local_detail",
     )
     return normalized_detail
 
@@ -202,6 +263,74 @@ def _fetch_json(path: str, *, params: Any) -> Any:
     if isinstance(payload, dict) and payload.get("errors"):
         raise ValueError(f"La API de beneficios devolvio errores: {payload['errors']}")
     return payload
+
+
+def _build_nearby_cache_key(
+    *,
+    latitude: float,
+    longitude: float,
+    page: int,
+    page_size: int,
+    distance_from_km: float,
+    distance_to_km: float,
+) -> tuple[Any, ...]:
+    decimals = _cache_round_decimals()
+    return (
+        "nearby_locales",
+        round(float(latitude), decimals),
+        round(float(longitude), decimals),
+        max(1, int(page)),
+        max(1, int(page_size)),
+        round(float(distance_from_km), 1),
+        round(float(distance_to_km), 1),
+    )
+
+
+def _read_cache(
+    cache_store: dict[tuple[Any, ...], dict[str, Any]],
+    key: tuple[Any, ...],
+    *,
+    ttl_seconds: int,
+    cache_name: str,
+) -> Any | None:
+    now = time.time()
+    with _CACHE_LOCK:
+        entry = cache_store.get(key)
+        if not entry:
+            log_step("BENEFITS_LOCATION_API", "Cache miss", {"cache": cache_name})
+            return None
+
+        if float(entry.get("expires_at", 0)) <= now:
+            cache_store.pop(key, None)
+            log_step("BENEFITS_LOCATION_API", "Cache expired", {"cache": cache_name})
+            return None
+
+        log_step("BENEFITS_LOCATION_API", "Cache hit", {"cache": cache_name, "ttl_seconds": ttl_seconds})
+        return copy.deepcopy(entry.get("value"))
+
+
+def _write_cache(
+    cache_store: dict[tuple[Any, ...], dict[str, Any]],
+    key: tuple[Any, ...],
+    value: Any,
+    *,
+    cache_name: str,
+) -> None:
+    with _CACHE_LOCK:
+        cache_store[key] = {
+            "value": copy.deepcopy(value),
+            "expires_at": time.time() + (
+                _nearby_cache_ttl_seconds()
+                if cache_name == "nearby_locales"
+                else _detail_cache_ttl_seconds()
+            ),
+        }
+
+
+def _clear_location_api_caches() -> None:
+    with _CACHE_LOCK:
+        _NEARBY_LOCALES_CACHE.clear()
+        _LOCAL_DETAIL_CACHE.clear()
 
 
 def _extract_list(payload: Any) -> list[Any]:
