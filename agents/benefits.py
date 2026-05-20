@@ -1,33 +1,81 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 import unicodedata
+from datetime import date
 from typing import Any
 
 from agents.state import AgentState
 from observability.logger import log_step
-from services.benefits_ranker import infer_benefits_search_context, rank_locales
+from services.benefits_intelligence import extract_benefits_intent
+from services.benefits_ranker import rank_enriched_locales, rank_locales
 from tools.benefits_location_api import (
     enrich_local_with_detail,
     get_local_promotions_detail,
     get_nearby_locales,
 )
 
+try:
+    from langchain_openai import ChatOpenAI
+except ImportError:  # pragma: no cover - fallback solo para tests sin dependencias
+    ChatOpenAI = Any  # type: ignore[misc,assignment]
 
-CATEGORY_HEADERS = {
-    "Supermercados": "🛒 Encontré estos supermercados cerca tuyo con beneficios Galicia:",
-    "Gastronomía": "🍽️ Encontré estos locales gastronómicos cerca tuyo con beneficios Galicia:",
-    "Indumentaria": "👟 Encontré estos locales de indumentaria cerca tuyo con beneficios Galicia:",
-    "Electrónica": "💻 Encontré estos locales de electrónica cerca tuyo con beneficios Galicia:",
-    "Hogar": "🏠 Encontré estos locales para el hogar cerca tuyo con beneficios Galicia:",
+
+BENEFITS_RESPONSE_PROMPT = """
+Sos un asistente bancario que responde por WhatsApp en español argentino.
+Tu tarea es redactar una respuesta consultiva sobre beneficios cercanos usando SOLO el JSON recibido.
+
+Reglas:
+- No inventes promociones, direcciones, porcentajes, topes, días, vigencias ni medios de pago.
+- Si un dato no viene, omitilo.
+- No digas "mejores descuentos" ni afirmaciones que no se puedan justificar.
+- Sí podés hablar de "opciones recomendadas" o "locales cercanos con beneficios Galicia".
+- Si viene "response_hint" dentro de "active_occasion", podés usarlo al comienzo.
+- Si "selected_promotion.is_eminent" es true, aclará que aplica para clientes Eminent.
+- Si "has_additional_eminent_promotion" es true y la promo principal no es Eminent, aclará que también hay un beneficio adicional para clientes Eminent.
+- Mostrá cada local en este estilo:
+  1. *Nombre* — Dirección
+  📍 A X km aprox.
+  💳 XX% de ahorro
+  🗓️ Días
+  💰 Tope: $X
+  💳 Medios: ...
+- Si no hay promociones claras, explicalo sin inventar nada y listá igual las opciones cercanas.
+- Cerrá con una recomendación breve y útil si se puede justificar con la categoría, el producto o la cercanía.
+"""
+
+LOCATION_PLACEHOLDER_PATTERNS = {
+    "ubicacion compartida por whatsapp",
+    "ubicación compartida por whatsapp",
+}
+
+CATEGORY_EMOJIS = {
+    "Supermercados": "🛒",
+    "Gastronomía": "🍽️",
+    "Indumentaria": "👟",
+    "Electrónica": "💻",
+    "Hogar": "🏠",
+    "Salud y Bienestar": "💄",
+    "Juguetes": "🧸",
+    "Mascotas": "🐾",
+    "Librerías": "📚",
 }
 
 
-def benefits_node(state: AgentState) -> AgentState:
+def benefits_node(
+    state: AgentState,
+    llm: ChatOpenAI | None = None,
+) -> AgentState:
     question = (state.get("question") or "").strip()
     standalone_question = (state.get("standalone_question") or question).strip()
-    query = standalone_question or question
+    memory = state.get("memory") or {}
+    resolved_query = _resolve_benefits_query(
+        question=question,
+        standalone_question=standalone_question,
+        memory=memory,
+    )
 
     user_location = state.get("user_location") or {}
     latitude = _safe_float(user_location.get("latitude"))
@@ -42,6 +90,7 @@ def benefits_node(state: AgentState) -> AgentState:
             "tool_input": {
                 "question": question,
                 "standalone_question": standalone_question,
+                "resolved_query": resolved_query,
             },
             "tool_output": {
                 "results_count": 0,
@@ -62,35 +111,27 @@ def benefits_node(state: AgentState) -> AgentState:
     detail_max_candidates = _get_int_env("BENEFITS_DETAIL_MAX_CANDIDATES", 8, minimum=1)
 
     try:
+        intent_context = extract_benefits_intent(resolved_query, llm=llm)
         nearby_locales = get_nearby_locales(latitude, longitude)
-        if not nearby_locales:
-            return {
-                **state,
-                "route": "benefits",
-                "tool_name": "benefits_location_api",
-                "tool_input": {
-                    "question": question,
-                    "standalone_question": standalone_question,
-                    "latitude": latitude,
-                    "longitude": longitude,
-                },
-                "tool_output": {
-                    "results_count": 0,
-                    "results": [],
-                },
-                "answer": (
-                    "📍 No encontré locales con beneficios cerca tuyo en este momento. "
-                    "Si querés, probá con otro rubro o de nuevo más tarde."
-                ),
-                "topic": "beneficios",
-                "needs_clarification": False,
-                "missing_fields": [],
-                "pending_route": "",
-                "error": None,
-            }
 
-        ranked_locales = rank_locales(nearby_locales, query=query)
-        top_candidates = ranked_locales[:detail_max_candidates]
+        if not nearby_locales:
+            return _build_no_locales_state(
+                state=state,
+                question=question,
+                standalone_question=standalone_question,
+                resolved_query=resolved_query,
+                latitude=latitude,
+                longitude=longitude,
+                intent_context=intent_context,
+            )
+
+        top_candidates = rank_locales(
+            nearby_locales,
+            query=resolved_query,
+            intent_context=intent_context,
+            max_candidates=detail_max_candidates,
+        )[:detail_max_candidates]
+
         enriched_candidates: list[dict[str, Any]] = []
         detail_errors = 0
         detail_successes = 0
@@ -113,23 +154,32 @@ def benefits_node(state: AgentState) -> AgentState:
                 )
                 enriched_candidates.append(enrich_local_with_detail(local, None))
 
-        search_context = infer_benefits_search_context(query)
-        answer = _build_answer(
-            locals_with_details=enriched_candidates,
-            search_context=search_context,
+        ranked_results = rank_enriched_locales(
+            enriched_candidates,
+            query=resolved_query,
+            intent_context=intent_context,
             max_results=max_results,
+            reference_date=date.today(),
+        )
+
+        answer = _build_answer(
+            query=resolved_query,
+            ranked_results=ranked_results,
+            intent_context=intent_context,
             detail_successes=detail_successes,
+            llm=llm,
         )
 
         log_step(
             "BENEFITS",
             "Beneficios cercanos procesados",
             {
-                "query": question,
+                "query": resolved_query,
                 "nearby_locales": len(nearby_locales),
                 "detail_candidates": len(top_candidates),
                 "detail_successes": detail_successes,
                 "detail_errors": detail_errors,
+                "final_results": len(ranked_results),
             },
         )
 
@@ -140,17 +190,20 @@ def benefits_node(state: AgentState) -> AgentState:
             "tool_input": {
                 "question": question,
                 "standalone_question": standalone_question,
+                "resolved_query": resolved_query,
                 "latitude": latitude,
                 "longitude": longitude,
                 "detail_max_candidates": detail_max_candidates,
                 "max_results": max_results,
             },
             "tool_output": {
-                "results_count": min(len(enriched_candidates), max_results),
-                "results": enriched_candidates[:max_results],
+                "results_count": len(ranked_results),
+                "results": ranked_results,
                 "nearby_locales_count": len(nearby_locales),
                 "detail_candidates_count": len(top_candidates),
                 "detail_successes": detail_successes,
+                "intent_context": intent_context,
+                "active_occasion": intent_context.get("active_occasion"),
             },
             "answer": answer,
             "topic": "beneficios",
@@ -165,6 +218,7 @@ def benefits_node(state: AgentState) -> AgentState:
             "Error consultando beneficios cercanos",
             {
                 "question": question,
+                "resolved_query": resolved_query,
                 "latitude": latitude,
                 "longitude": longitude,
                 "error": str(exc),
@@ -177,6 +231,7 @@ def benefits_node(state: AgentState) -> AgentState:
             "tool_input": {
                 "question": question,
                 "standalone_question": standalone_question,
+                "resolved_query": resolved_query,
                 "latitude": latitude,
                 "longitude": longitude,
             },
@@ -196,158 +251,328 @@ def benefits_node(state: AgentState) -> AgentState:
         }
 
 
+def _build_no_locales_state(
+    *,
+    state: AgentState,
+    question: str,
+    standalone_question: str,
+    resolved_query: str,
+    latitude: float,
+    longitude: float,
+    intent_context: dict[str, Any],
+) -> AgentState:
+    category_candidates = intent_context.get("category_candidates") or []
+    if category_candidates:
+        answer = (
+            f"📍 No encontré locales cercanos con beneficios para *{category_candidates[0]}* "
+            "en este momento. Si querés, puedo probar con otro rubro."
+        )
+    else:
+        answer = (
+            "📍 No encontré locales con beneficios cerca tuyo en este momento. "
+            "Si querés, probá con otro rubro o de nuevo más tarde."
+        )
+
+    return {
+        **state,
+        "route": "benefits",
+        "tool_name": "benefits_location_api",
+        "tool_input": {
+            "question": question,
+            "standalone_question": standalone_question,
+            "resolved_query": resolved_query,
+            "latitude": latitude,
+            "longitude": longitude,
+        },
+        "tool_output": {
+            "results_count": 0,
+            "results": [],
+            "intent_context": intent_context,
+        },
+        "answer": answer,
+        "topic": "beneficios",
+        "needs_clarification": False,
+        "missing_fields": [],
+        "pending_route": "",
+        "error": None,
+    }
+
+
 def _build_answer(
     *,
-    locals_with_details: list[dict[str, Any]],
-    search_context: dict[str, Any],
-    max_results: int,
+    query: str,
+    ranked_results: list[dict[str, Any]],
+    intent_context: dict[str, Any],
+    detail_successes: int,
+    llm: ChatOpenAI | None,
+) -> str:
+    payload = {
+        "query": query,
+        "intent_context": {
+            "intent": intent_context.get("intent"),
+            "commercial_intent": intent_context.get("commercial_intent"),
+            "product_interest": intent_context.get("product_interest"),
+            "recipient": intent_context.get("recipient"),
+            "occasion": intent_context.get("occasion"),
+            "category_candidates": intent_context.get("category_candidates") or [],
+            "store_type_hints": intent_context.get("store_type_hints") or [],
+            "brand_or_store_hints": intent_context.get("brand_or_store_hints") or [],
+            "audience_hint": intent_context.get("audience_hint") or "general",
+            "active_occasion": intent_context.get("active_occasion"),
+        },
+        "detail_successes": detail_successes,
+        "locals": [_serialize_local_for_response(local) for local in ranked_results],
+    }
+
+    if llm is not None:
+        try:
+            response = llm.invoke(
+                [
+                    ("system", BENEFITS_RESPONSE_PROMPT),
+                    ("user", json.dumps(payload, ensure_ascii=False)),
+                ]
+            )
+            answer = _coerce_text_response(getattr(response, "content", ""))
+            if answer:
+                return answer
+        except Exception as exc:
+            log_step("BENEFITS", "Fallo la redaccion LLM de benefits", {"error": str(exc)})
+
+    return _build_deterministic_answer(
+        ranked_results=ranked_results,
+        intent_context=intent_context,
+        detail_successes=detail_successes,
+    )
+
+
+def _build_deterministic_answer(
+    *,
+    ranked_results: list[dict[str, Any]],
+    intent_context: dict[str, Any],
     detail_successes: int,
 ) -> str:
-    promo_ready_locals = [
-        local
-        for local in locals_with_details
-        if _select_primary_promotion(local) is not None
+    promo_ready_results = [
+        local for local in ranked_results if isinstance(local.get("selected_promotion"), dict)
     ]
 
-    if promo_ready_locals:
-        lines = [_build_header(search_context), ""]
-        selected_locals = promo_ready_locals[:max_results]
+    if not promo_ready_results:
+        return _build_nearby_only_answer(
+            ranked_results=ranked_results,
+            detail_successes=detail_successes,
+            intent_context=intent_context,
+        )
 
-        for index, local in enumerate(selected_locals, start=1):
-            lines.extend(_format_promo_local(index, local))
-            lines.append("")
+    lines = [_build_header(intent_context), ""]
 
-        first_local = selected_locals[0]
-        if first_local.get("brand"):
-            lines.append(
-                f"Te conviene arrancar por *{first_local['brand']}* porque es el más cercano."
-            )
+    for index, local in enumerate(promo_ready_results, start=1):
+        lines.extend(_format_local_block(index, local))
+        lines.append("")
 
-        return "\n".join(lines).strip()
+    closing = _build_closing(promo_ready_results, intent_context)
+    if closing:
+        lines.append(closing)
 
+    return "\n".join(lines).strip()
+
+
+def _build_nearby_only_answer(
+    *,
+    ranked_results: list[dict[str, Any]],
+    detail_successes: int,
+    intent_context: dict[str, Any],
+) -> str:
     lines = []
     if detail_successes == 0:
         lines.append(
             "📍 Encontré locales cerca tuyo, pero ahora no pude confirmar el detalle de las promociones."
         )
-        lines.append("Te paso igual los más cercanos:")
     else:
         lines.append(
-            "📍 Encontré locales cerca tuyo, pero no vi promociones vigentes o claras en los mejores candidatos."
+            "📍 Encontré locales cerca tuyo, pero no vi promociones vigentes o claras en las opciones más relevantes."
         )
-        lines.append("Te paso igual las opciones más cercanas:")
 
+    active_occasion = intent_context.get("active_occasion") or {}
+    if active_occasion.get("response_hint"):
+        lines.append(str(active_occasion["response_hint"]).strip())
+
+    lines.append("Te paso igual algunas opciones cercanas:")
     lines.append("")
 
-    for index, local in enumerate(locals_with_details[:max_results], start=1):
-        lines.extend(_format_nearby_local(index, local))
+    for index, local in enumerate(ranked_results, start=1):
+        header = f"{index}. *{str(local.get('brand') or 'Local adherido').strip()}*"
+        address = _best_address(local)
+        if address:
+            header = f"{header} — {address}"
+        lines.append(header)
+        distance = _format_distance(local.get("distance_km"))
+        if distance:
+            lines.append(f"📍 A {distance} aprox.")
         lines.append("")
 
     lines.append("Si querés, también puedo probar con otro rubro o con un comercio puntual.")
     return "\n".join(lines).strip()
 
 
-def _build_header(search_context: dict[str, Any]) -> str:
-    category = search_context.get("mentioned_category")
-    if category and category in CATEGORY_HEADERS:
-        return CATEGORY_HEADERS[category]
-    return "📍 Encontré estos locales cerca tuyo con beneficios Galicia:"
+def _build_header(intent_context: dict[str, Any]) -> str:
+    active_occasion = intent_context.get("active_occasion") or {}
+    response_hint = str(active_occasion.get("response_hint") or "").strip()
+    primary_category = next(iter(intent_context.get("category_candidates") or []), None)
+    product_interest = str(intent_context.get("product_interest") or "").strip()
+
+    if response_hint:
+        emoji = CATEGORY_EMOJIS.get(primary_category, "📍")
+        detail = "opciones cercanas con beneficios Galicia"
+        if product_interest:
+            detail = f"opciones cercanas que pueden servir para {product_interest}"
+        return f"{emoji} {response_hint}\nBusqué {detail}:"
+
+    if intent_context.get("commercial_intent") == "gift_planning" and product_interest:
+        emoji = CATEGORY_EMOJIS.get(primary_category, "🎁")
+        return f"{emoji} Busqué opciones cercanas que pueden servir para regalar {product_interest}:"
+
+    if primary_category:
+        emoji = CATEGORY_EMOJIS.get(primary_category, "📍")
+        category_label = primary_category.lower()
+        return f"{emoji} Encontré estos locales de {category_label} cerca tuyo con beneficios Galicia:"
+
+    return "📍 Encontré estos locales cercanos con beneficios Galicia:"
 
 
-def _format_promo_local(index: int, local: dict[str, Any]) -> list[str]:
-    primary_promotion = _select_primary_promotion(local)
-    if primary_promotion is None:
-        return _format_nearby_local(index, local)
-
+def _format_local_block(index: int, local: dict[str, Any]) -> list[str]:
     brand = str(local.get("brand") or "Local adherido").strip()
     address = _best_address(local)
     distance_text = _format_distance(local.get("distance_km"))
+    promotion = local.get("selected_promotion") or {}
 
     header = f"{index}. *{brand}*"
     if address:
         header = f"{header} — {address}"
 
     lines = [header]
-
     if distance_text:
         lines.append(f"📍 A {distance_text} aprox.")
 
-    discount_percent = primary_promotion.get("discount_percent")
+    discount_percent = promotion.get("discount_percent")
     if discount_percent is not None:
         lines.append(f"💳 {_format_discount(discount_percent)} de ahorro")
 
-    days = str(primary_promotion.get("days") or "").strip()
+    days = str(promotion.get("days") or "").strip()
     if days:
         lines.append(f"🗓️ {days}")
 
-    cashback_cap = primary_promotion.get("cashback_cap")
+    cashback_cap = promotion.get("cashback_cap")
     if cashback_cap is not None:
         lines.append(f"💰 Tope: {_format_money(cashback_cap)}")
 
-    payment_summary = str(primary_promotion.get("payment_summary") or "").strip()
-    if payment_summary:
-        lines.append(f"💳 Medios: {payment_summary}")
+    payment_text = str(
+        promotion.get("payment_summary")
+        or promotion.get("pay_legend")
+        or ""
+    ).strip()
+    if payment_text:
+        lines.append(f"💳 Medios: {payment_text}")
 
-    if _has_additional_eminent_promotion(local, primary_promotion):
-        lines.append("💎 También tiene un beneficio adicional para clientes Eminent.")
-    elif primary_promotion.get("is_eminent"):
+    if promotion.get("is_eminent"):
         lines.append("💎 Aplica para clientes Eminent.")
+    elif local.get("has_additional_eminent_promotion"):
+        lines.append("💎 También tiene un beneficio adicional para clientes Eminent.")
 
     return lines
 
 
-def _format_nearby_local(index: int, local: dict[str, Any]) -> list[str]:
-    brand = str(local.get("brand") or "Local adherido").strip()
-    address = _best_address(local)
-    distance_text = _format_distance(local.get("distance_km"))
-
-    header = f"{index}. *{brand}*"
-    if address:
-        header = f"{header} — {address}"
-
-    lines = [header]
-    if distance_text:
-        lines.append(f"📍 A {distance_text} aprox.")
-    return lines
-
-
-def _select_primary_promotion(local: dict[str, Any]) -> dict[str, Any] | None:
-    promotions = [
-        promotion
-        for promotion in (local.get("promotions") or [])
-        if isinstance(promotion, dict) and not promotion.get("coming_soon")
+def _build_closing(
+    ranked_results: list[dict[str, Any]],
+    intent_context: dict[str, Any],
+) -> str:
+    top_brands = [
+        str(local.get("brand") or "").strip()
+        for local in ranked_results[:2]
+        if str(local.get("brand") or "").strip()
     ]
-    if not promotions:
-        return None
-
-    mass_promotions = [promotion for promotion in promotions if not promotion.get("is_eminent")]
-    if mass_promotions:
-        return _sort_promotions(mass_promotions)[0]
-
-    return _sort_promotions(promotions)[0]
-
-
-def _has_additional_eminent_promotion(
-    local: dict[str, Any],
-    primary_promotion: dict[str, Any],
-) -> bool:
-    for promotion in local.get("promotions") or []:
-        if not isinstance(promotion, dict) or promotion is primary_promotion:
+    unique_top_brands = []
+    seen: set[str] = set()
+    for brand in top_brands:
+        normalized_brand = _normalize_text(brand)
+        if normalized_brand in seen:
             continue
-        if promotion.get("coming_soon"):
-            continue
-        if promotion.get("is_eminent"):
-            return True
-    return False
+        seen.add(normalized_brand)
+        unique_top_brands.append(brand)
+
+    product_interest = str(intent_context.get("product_interest") or "").strip()
+    store_type_hints = [str(hint).strip() for hint in intent_context.get("store_type_hints") or [] if str(hint).strip()]
+
+    if intent_context.get("commercial_intent") == "gift_planning" and unique_top_brands:
+        preferred_types = " / ".join(store_type_hints[:2]) if store_type_hints else "ese tipo de compra"
+        if len(unique_top_brands) == 1:
+            return (
+                f"Para {product_interest or 'este tipo de regalo'}, miraría primero *{unique_top_brands[0]}* "
+                f"porque parece una opción bien orientada a {preferred_types}."
+            )
+        return (
+            f"Para {product_interest or 'este tipo de regalo'}, miraría primero "
+            f"*{unique_top_brands[0]}* o *{unique_top_brands[1]}* porque están más orientados a {preferred_types}."
+        )
+
+    if not unique_top_brands:
+        return ""
+
+    if len(unique_top_brands) == 1:
+        return f"Te conviene arrancar por *{unique_top_brands[0]}* porque es una de las opciones más cercanas."
+
+    return (
+        f"Te conviene arrancar por *{unique_top_brands[0]}* o *{unique_top_brands[1]}* "
+        "porque quedaron entre las opciones más cercanas y relevantes."
+    )
 
 
-def _sort_promotions(promotions: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    def sort_key(promotion: dict[str, Any]) -> tuple[int, float, float]:
-        discount = _safe_float(promotion.get("discount_percent")) or 0.0
-        cap = _safe_float(promotion.get("cashback_cap")) or 0.0
-        return (0 if not promotion.get("is_eminent") else 1, -discount, -cap)
+def _serialize_local_for_response(local: dict[str, Any]) -> dict[str, Any]:
+    promotion = local.get("selected_promotion") or {}
+    return {
+        "brand": local.get("brand"),
+        "category": local.get("category"),
+        "address": _best_address(local) or None,
+        "distance_km": _safe_float(local.get("distance_km")),
+        "selected_promotion": {
+            "discount_percent": promotion.get("discount_percent"),
+            "cashback_cap": promotion.get("cashback_cap"),
+            "days": promotion.get("days"),
+            "payment_summary": promotion.get("payment_summary"),
+            "pay_legend": promotion.get("pay_legend"),
+            "is_eminent": bool(promotion.get("is_eminent")),
+        }
+        if promotion
+        else None,
+        "has_additional_eminent_promotion": bool(local.get("has_additional_eminent_promotion")),
+    }
 
-    return sorted(promotions, key=sort_key)
+
+def _resolve_benefits_query(
+    *,
+    question: str,
+    standalone_question: str,
+    memory: dict[str, Any],
+) -> str:
+    candidate = standalone_question or question
+    normalized_candidate = _normalize_text(candidate)
+
+    if normalized_candidate in LOCATION_PLACEHOLDER_PATTERNS:
+        memory_question = str(memory.get("last_user_question") or "").strip()
+        if memory_question:
+            return memory_question
+
+    return candidate or str(memory.get("last_user_question") or "").strip() or question
+
+
+def _coerce_text_response(content: Any) -> str:
+    if isinstance(content, list):
+        text = "\n".join(
+            str(item.get("text", item)) if isinstance(item, dict) else str(item)
+            for item in content
+        )
+    else:
+        text = str(content or "")
+
+    return text.strip()
 
 
 def _best_address(local: dict[str, Any]) -> str:
@@ -411,8 +636,8 @@ def _safe_float(value: Any) -> float | None:
         return None
 
 
-def _normalize_text(text: str | None) -> str:
-    normalized = unicodedata.normalize("NFKD", text or "")
+def _normalize_text(text: Any) -> str:
+    normalized = unicodedata.normalize("NFKD", str(text or ""))
     without_accents = "".join(
         character for character in normalized if not unicodedata.combining(character)
     )

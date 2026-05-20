@@ -1,0 +1,372 @@
+[
+  {
+    "id": "ano_nuevo",
+    "name": "Año Nuevo",
+    "rule": {
+      "type": "fixed_date",
+      "month": 1,
+      "day": 1
+    },
+    "window_before_days": 10,
+    "window_after_days": 1,
+    "related_categories": [
+      "Gastronomía",
+      "Turismo",
+      "Indumentaria",
+      "Supermercados"
+    ],
+    "response_hint": "Como se acerca Año Nuevo, te dejo opciones que pueden servir para festejar o regalar."
+  },
+  {
+    "id": "san_valentin",
+    "name": "San Valentín",
+    "rule": {
+      "type": "fixed_date",
+      "month": 2,
+      "day": 14
+    },
+    "window_before_days": 14,
+    "window_after_days": 1,
+    "related_categories": [
+      "Gastronomía",
+      "Indumentaria",
+      "Salud y Bienestar",
+      "Entretenimiento"
+    ],
+    "response_hint": "Como se acerca San Valentín, te dejo opciones que pueden servir para regalar o compartir."
+  },
+  {
+    "id": "carnaval",
+    "name": "Carnaval",
+    "rule": {
+      "type": "movable_holiday",
+      "depends_on": "easter",
+      "offset_days": -47
+    },
+    "window_before_days": 10,
+    "window_after_days": 2,
+    "related_categories": [
+      "Turismo",
+      "Gastronomía",
+      "Entretenimiento",
+      "Supermercados"
+    ],
+    "response_hint": "Como se viene Carnaval, te dejo opciones útiles para escapadas, salidas o festejos."
+  },
+  {
+    "id": "vuelta_al_cole",
+    "name": "Vuelta al cole",
+    "rule": {
+      "type": "seasonal_window",
+      "month": 3,
+      "day": 1
+    },
+    "window_before_days": 30,
+    "window_after_days": 15,
+    "related_categories": [
+      "Librería",
+      "Indumentaria",
+      "Electrónica",
+      "Supermercados"
+    ],
+    "response_hint": "Como estamos en época de vuelta al cole, te marco opciones que pueden servir para organizar las compras."
+  },
+  {
+    "id": "dia_de_la_mujer",
+    "name": "Día de la Mujer",
+    "rule": {
+      "type": "fixed_date",
+      "month": 3,
+      "day": 8
+    },
+    "window_before_days": 7,
+    "window_after_days": 1,
+    "related_categories": [
+      "Indumentaria",
+      "Salud y Bienestar",
+      "Gastronomía",
+      "Hogar"
+    ],
+    "response_hint": "Por el Día de la Mujer, te dejo opciones que pueden servir para regalar o compartir."
+  },
+  {
+    "id": "pascuas",
+    "name": "Pascuas",
+    "rule": {
+      "type": "movable_holiday",
+      "depends_on": "easter",
+      "offset_days": 0
+    },
+    "window_before_days": 21,
+    "window_after_days": 1,
+    "related_categories": [
+      "Chocolates",
+      "Supermercados",
+      "Gastronomía",
+      "Turismo"
+    ],
+    "response_hint": "Como se acercan las Pascuas, te dejo opciones para comprar chocolates, organizar una comida o hacer una escapada."
+  },
+  {
+    "id": "dia_del_trabajador",
+    "name": "Día del Trabajador",
+    "rule": {
+      "type": "fixed_date",
+      "month": 5,
+      "day": 1
+    },
+    "window_before_days": 7,
+    "window_after_days": 1,
+    "related_categories": [
+      "Gastronomía",
+      "Supermercados",
+      "Turismo",
+      "Entretenimiento"
+    ],
+    "response_hint": "Como se acerca el Día del Trabajador, te dejo opciones para aprovechar en salidas, comidas o compras."
+  },
+  {
+    "id": "hot_sale",
+    "name": "Hot Sale",
+    "rule": {
+      "type": "variable_date",
+      "month": 5,
+      "source": "CACE",
+      "requires_yearly_update": true
+    },
+    "window_before_days": 7,
+    "window_after_days": 3,
+    "related_categories": [
+      "Electrónica",
+      "Indumentaria",
+      "Hogar",
+      "Turismo",
+      "Supermercados"
+    ],
+    "response_hint": "Como estamos cerca del Hot Sale, te dejo beneficios y promos que pueden servir para comprar online."
+  },
+  {
+    "id": "dia_del_padre",
+    "name": "Día del Padre",
+    "rule": {
+      "type": "nth_weekday_of_month",
+      "month": 6,
+      "weekday": "sunday",
+      "nth": 3
+    },
+    "window_before_days": 21,
+    "window_after_days": 1,
+    "related_categories": [
+      "Indumentaria",
+      "Electrónica",
+      "Gastronomía",
+      "Hogar"
+    ],
+    "response_hint": "Justo se viene el Día del Padre, así que te dejo opciones que pueden servir para regalar."
+  },
+  {
+    "id": "vacaciones_de_invierno",
+    "name": "Vacaciones de invierno",
+    "rule": {
+      "type": "seasonal_window",
+      "month": 7,
+      "day": 15
+    },
+    "window_before_days": 21,
+    "window_after_days": 21,
+    "related_categories": [
+      "Turismo",
+      "Entretenimiento",
+      "Gastronomía",
+      "Juguetes"
+    ],
+    "response_hint": "Como estamos en época de vacaciones de invierno, te dejo opciones para salidas, escapadas o actividades."
+  },
+  {
+    "id": "dia_del_amigo",
+    "name": "Día del Amigo",
+    "rule": {
+      "type": "fixed_date",
+      "month": 7,
+      "day": 20
+    },
+    "window_before_days": 14,
+    "window_after_days": 1,
+    "related_categories": [
+      "Gastronomía",
+      "Entretenimiento",
+      "Bebidas",
+      "Experiencias"
+    ],
+    "response_hint": "Como se acerca el Día del Amigo, te dejo opciones para juntarse, salir o compartir algo rico."
+  },
+  {
+    "id": "dia_de_la_ninez",
+    "name": "Día de la Niñez",
+    "rule": {
+      "type": "nth_weekday_of_month",
+      "month": 8,
+      "weekday": "sunday",
+      "nth": 3
+    },
+    "window_before_days": 21,
+    "window_after_days": 1,
+    "related_categories": [
+      "Juguetes",
+      "Indumentaria",
+      "Electrónica",
+      "Entretenimiento"
+    ],
+    "response_hint": "Como se acerca el Día de la Niñez, te dejo opciones que pueden servir para regalar."
+  },
+  {
+    "id": "dia_del_maestro",
+    "name": "Día del Maestro",
+    "rule": {
+      "type": "fixed_date",
+      "month": 9,
+      "day": 11
+    },
+    "window_before_days": 7,
+    "window_after_days": 1,
+    "related_categories": [
+      "Librería",
+      "Gastronomía",
+      "Regalos",
+      "Salud y Bienestar"
+    ],
+    "response_hint": "Como se acerca el Día del Maestro, te dejo opciones que pueden servir para regalar."
+  },
+  {
+    "id": "dia_de_la_primavera",
+    "name": "Día de la Primavera",
+    "rule": {
+      "type": "fixed_date",
+      "month": 9,
+      "day": 21
+    },
+    "window_before_days": 10,
+    "window_after_days": 1,
+    "related_categories": [
+      "Gastronomía",
+      "Entretenimiento",
+      "Indumentaria",
+      "Turismo"
+    ],
+    "response_hint": "Como se viene el Día de la Primavera, te dejo opciones para salir, juntarse o aprovechar promos."
+  },
+  {
+    "id": "dia_de_la_madre",
+    "name": "Día de la Madre",
+    "rule": {
+      "type": "nth_weekday_of_month",
+      "month": 10,
+      "weekday": "sunday",
+      "nth": 3
+    },
+    "window_before_days": 21,
+    "window_after_days": 1,
+    "related_categories": [
+      "Indumentaria",
+      "Salud y Bienestar",
+      "Gastronomía",
+      "Hogar"
+    ],
+    "response_hint": "Como se acerca el Día de la Madre, te marco opciones que pueden servir para regalo."
+  },
+  {
+    "id": "halloween",
+    "name": "Halloween",
+    "rule": {
+      "type": "fixed_date",
+      "month": 10,
+      "day": 31
+    },
+    "window_before_days": 10,
+    "window_after_days": 1,
+    "related_categories": [
+      "Cotillón",
+      "Entretenimiento",
+      "Gastronomía",
+      "Indumentaria"
+    ],
+    "response_hint": "Como se acerca Halloween, te dejo opciones para disfraces, salidas o festejos."
+  },
+  {
+    "id": "cyber_monday",
+    "name": "CyberMonday",
+    "rule": {
+      "type": "variable_date",
+      "month": 11,
+      "source": "CACE",
+      "requires_yearly_update": true
+    },
+    "window_before_days": 7,
+    "window_after_days": 3,
+    "related_categories": [
+      "Electrónica",
+      "Indumentaria",
+      "Hogar",
+      "Turismo",
+      "Supermercados"
+    ],
+    "response_hint": "Como estamos cerca del CyberMonday, te dejo beneficios y promos que pueden servir para comprar online."
+  },
+  {
+    "id": "black_friday",
+    "name": "Black Friday",
+    "rule": {
+      "type": "nth_weekday_of_month",
+      "month": 11,
+      "weekday": "friday",
+      "nth": 4
+    },
+    "window_before_days": 7,
+    "window_after_days": 3,
+    "related_categories": [
+      "Electrónica",
+      "Indumentaria",
+      "Hogar",
+      "Supermercados"
+    ],
+    "response_hint": "Como se acerca Black Friday, te dejo opciones con beneficios que pueden servir para aprovechar descuentos."
+  },
+  {
+    "id": "navidad",
+    "name": "Navidad",
+    "rule": {
+      "type": "fixed_date",
+      "month": 12,
+      "day": 25
+    },
+    "window_before_days": 30,
+    "window_after_days": 1,
+    "related_categories": [
+      "Juguetes",
+      "Indumentaria",
+      "Electrónica",
+      "Hogar",
+      "Gastronomía"
+    ],
+    "response_hint": "Como se acerca Navidad, te dejo opciones que pueden servir para regalos."
+  },
+  {
+    "id": "fiestas_fin_de_ano",
+    "name": "Fiestas de fin de año",
+    "rule": {
+      "type": "fixed_date",
+      "month": 12,
+      "day": 31
+    },
+    "window_before_days": 21,
+    "window_after_days": 1,
+    "related_categories": [
+      "Gastronomía",
+      "Bebidas",
+      "Supermercados",
+      "Turismo",
+      "Indumentaria"
+    ],
+    "response_hint": "Como se acercan las fiestas de fin de año, te dejo opciones para compras, cenas o escapadas."
+  }
+]
