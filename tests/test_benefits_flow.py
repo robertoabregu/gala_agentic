@@ -26,6 +26,14 @@ class ExplodingLLM:
         raise AssertionError("No deberia invocarse el LLM en este caso")
 
 
+class GreetingBenefitsLLM:
+    def invoke(self, *_args, **_kwargs):
+        class Response:
+            content = "¡Hola! Te cuento las opciones que encontré cerca tuyo con beneficios Galicia."
+
+        return Response()
+
+
 def _load_build_initial_state():
     fake_faiss = types.ModuleType("faiss")
     with patch.dict(sys.modules, {"faiss": fake_faiss}):
@@ -402,6 +410,48 @@ class BenefitsFlowTests(unittest.TestCase):
         )
 
         self.assertIn("Sarmiento 1, Tigre", result["answer"])
+
+    @patch("agents.benefits.get_local_promotions_detail")
+    @patch("agents.benefits.get_nearby_locales")
+    def test_benefits_response_strips_leading_greeting(self, nearby_mock, detail_mock) -> None:
+        nearby_mock.return_value = [
+            {
+                "local_id": 41,
+                "brand": "Dexter",
+                "category": "Indumentaria",
+                "distance_km": 1.5,
+                "city": "San Fernando",
+                "province": "Buenos Aires",
+            }
+        ]
+        detail_mock.return_value = {
+            "local_id": 41,
+            "brand": "Dexter",
+            "address": "Constitucion 729, San Fernando",
+            "city": "San Fernando",
+            "province": "Buenos Aires",
+            "promotions": [
+                {
+                    "discount_percent": 20,
+                    "cashback_cap": 10000,
+                    "days": "Viernes",
+                    "is_eminent": False,
+                    "payment_summary": "Tarjetas Galicia",
+                }
+            ],
+        }
+
+        result = benefits_node(
+            _base_state(
+                "zapatillas para correr",
+                route="benefits",
+                user_location={"latitude": "-34.45", "longitude": "-58.55"},
+            ),
+            llm=GreetingBenefitsLLM(),
+        )
+
+        self.assertFalse(result["answer"].lower().startswith("hola"))
+        self.assertFalse(result["answer"].startswith("¡Hola"))
 
     def test_router_regression_for_other_routes(self) -> None:
         cases = [

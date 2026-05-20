@@ -31,6 +31,7 @@ Tu tarea es redactar una respuesta consultiva sobre beneficios cercanos usando S
 Reglas:
 - No inventes promociones, direcciones, porcentajes, topes, días, vigencias ni medios de pago.
 - Si un dato no viene, omitilo.
+- No empieces con "Hola", "Buenas" ni saludos similares.
 - No digas "mejores descuentos" ni afirmaciones que no se puedan justificar.
 - Sí podés hablar de "opciones recomendadas" o "locales cercanos con beneficios Galicia".
 - Si viene "response_hint" dentro de "active_occasion", podés usarlo al comienzo.
@@ -409,7 +410,9 @@ def _build_answer(
                     ("user", json.dumps(payload, ensure_ascii=False)),
                 ]
             )
-            answer = _coerce_text_response(getattr(response, "content", ""))
+            answer = _strip_leading_greeting(
+                _coerce_text_response(getattr(response, "content", ""))
+            )
             if answer:
                 return answer
         except Exception as exc:
@@ -655,6 +658,16 @@ def _coerce_text_response(content: Any) -> str:
         text = str(content or "")
 
     return text.strip()
+
+
+def _strip_leading_greeting(answer: str) -> str:
+    cleaned = re.sub(
+        r"^\W*(hola|buenas|buen dia|buenos dias|buenas tardes|buenas noches)\b[\W_]*",
+        "",
+        answer or "",
+        flags=re.IGNORECASE,
+    )
+    return cleaned.strip()
 
 
 def _best_address(local: dict[str, Any]) -> str:
