@@ -389,6 +389,11 @@ CHITCHAT_EXACT = {
     "como estas",
 }
 
+LOCATION_PLACEHOLDER_PATTERNS = {
+    "ubicacion compartida por whatsapp",
+    "ubicación compartida por whatsapp",
+}
+
 
 def _normalize_text(text: str) -> str:
     normalized = unicodedata.normalize("NFKD", text or "")
@@ -411,6 +416,23 @@ def _normalize_route(route: str) -> str:
 
 def _contains_normalized_term(text: str, term: str) -> bool:
     return f" {term} " in f" {text} "
+
+
+def _is_location_share_message(
+    question: str,
+    user_location: dict[str, Any],
+) -> bool:
+    latitude = str((user_location or {}).get("latitude") or "").strip()
+    longitude = str((user_location or {}).get("longitude") or "").strip()
+    if not latitude or not longitude:
+        return False
+
+    normalized_question = _normalize_text(question)
+    return normalized_question in LOCATION_PLACEHOLDER_PATTERNS
+
+
+def _has_media_attachment(media: dict[str, Any]) -> bool:
+    return bool(media)
 
 
 def _is_sensitive_request(normalized_question: str) -> bool:
@@ -535,7 +557,7 @@ def _is_credit_card_statement_request(
         for pattern in CREDIT_CARD_FOLLOWUP_PATTERNS
     )
 
-    if pending_route == "credit_card_statement":
+    if pending_route == "credit_card_statement" and has_media:
         return True
 
     if has_pdf_media and (
@@ -698,8 +720,7 @@ def router_node(
     media = state.get("media") or {}
 
     user_location = state.get("user_location") or {}
-    latitude = user_location.get("latitude")
-    longitude = user_location.get("longitude")
+    is_location_share_message = _is_location_share_message(question, user_location)
 
     if not question:
         log_step("ROUTER", "Fallback por pregunta vacia")
@@ -709,7 +730,7 @@ def router_node(
             "error": "Pregunta vacia.",
         }
 
-    if latitude and longitude and (
+    if is_location_share_message and (
         pending_route == "benefits"
     ):
         log_step(
@@ -728,7 +749,7 @@ def router_node(
             "error": None,
         }
 
-    if latitude and longitude and (
+    if is_location_share_message and (
         pending_route == "branch_locator"
         or last_route == "branch_locator"
         or last_topic == "sucursales_cercanas"
@@ -746,6 +767,18 @@ def router_node(
             **state,
             "route": "branch_locator",
             "pending_route": "",
+            "error": None,
+        }
+
+    if pending_route == "credit_card_statement" and _has_media_attachment(media):
+        log_step(
+            "ROUTER",
+            "Adjunto recibido para flujo credit_card_statement pendiente",
+            {"pending_route": pending_route},
+        )
+        return {
+            **state,
+            "route": "credit_card_statement",
             "error": None,
         }
 
@@ -771,18 +804,6 @@ def router_node(
             **state,
             "route": "bcra_credit_status",
             "pending_route": "",
-            "error": None,
-        }
-
-    if pending_route in {"bcra_credit_status", "branch_locator", "benefits", "credit_card_statement"}:
-        log_step(
-            "ROUTER",
-            "Ruta recuperada desde memoria local",
-            {"pending_route": pending_route},
-        )
-        return {
-            **state,
-            "route": pending_route,
             "error": None,
         }
 
