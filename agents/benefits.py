@@ -109,7 +109,9 @@ def benefits_node(
         }
 
     max_results = _get_int_env("BENEFITS_MAX_RESULTS", 5, minimum=1)
-    detail_max_candidates = _get_int_env("BENEFITS_DETAIL_MAX_CANDIDATES", 8, minimum=1)
+    detail_max_candidates = _get_int_env("BENEFITS_DETAIL_MAX_CANDIDATES", 5, minimum=1)
+    detail_expansion_batch = _get_int_env("BENEFITS_DETAIL_EXPANSION_BATCH", 3, minimum=1)
+    min_promo_results = _get_int_env("BENEFITS_MIN_PROMO_RESULTS", 3, minimum=1)
 
     try:
         intent_context = extract_benefits_intent(resolved_query, llm=llm)
@@ -126,54 +128,43 @@ def benefits_node(
                 intent_context=intent_context,
             )
 
-        top_candidates = rank_locales(
+        ranked_candidates_pool = rank_locales(
             nearby_locales,
             query=resolved_query,
             intent_context=intent_context,
-            max_candidates=detail_max_candidates,
-        )[:detail_max_candidates]
+            max_candidates=detail_max_candidates + detail_expansion_batch,
+        )
 
-        enriched_candidates_by_index: dict[int, dict[str, Any]] = {}
-        detail_errors = 0
-        detail_successes = 0
-
-        max_workers = min(4, len(top_candidates)) or 1
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_map = {
-                executor.submit(get_local_promotions_detail, local["local_id"]): (index, local)
-                for index, local in enumerate(top_candidates)
-            }
-            for future in as_completed(future_map):
-                index, local = future_map[future]
-                try:
-                    local_detail = future.result()
-                    detail_successes += 1
-                    enriched_candidates_by_index[index] = enrich_local_with_detail(local, local_detail)
-                except Exception as exc:
-                    detail_errors += 1
-                    log_step(
-                        "BENEFITS",
-                        "No se pudo obtener el detalle de un local",
-                        {
-                            "local_id": local.get("local_id"),
-                            "brand": local.get("brand"),
-                            "error": str(exc),
-                        },
-                    )
-                    enriched_candidates_by_index[index] = enrich_local_with_detail(local, None)
-
-        enriched_candidates = [
-            enriched_candidates_by_index[index]
-            for index in sorted(enriched_candidates_by_index)
+        initial_candidates = ranked_candidates_pool[:detail_max_candidates]
+        expansion_candidates = ranked_candidates_pool[
+            detail_max_candidates:detail_max_candidates + detail_expansion_batch
         ]
+        expansion_used = False
 
-        ranked_results = rank_enriched_locales(
-            enriched_candidates,
-            query=resolved_query,
+        enriched_candidates, detail_successes, detail_errors = _fetch_enriched_candidates(
+            initial_candidates
+        )
+        ranked_results = _rank_benefits_results(
+            enriched_candidates=enriched_candidates,
+            resolved_query=resolved_query,
             intent_context=intent_context,
             max_results=max_results,
-            reference_date=date.today(),
         )
+
+        if expansion_candidates and _count_useful_results(ranked_results) < min_promo_results:
+            extra_candidates, extra_successes, extra_errors = _fetch_enriched_candidates(
+                expansion_candidates
+            )
+            enriched_candidates.extend(extra_candidates)
+            detail_successes += extra_successes
+            detail_errors += extra_errors
+            ranked_results = _rank_benefits_results(
+                enriched_candidates=enriched_candidates,
+                resolved_query=resolved_query,
+                intent_context=intent_context,
+                max_results=max_results,
+            )
+            expansion_used = True
 
         answer = _build_answer(
             query=resolved_query,
@@ -189,7 +180,8 @@ def benefits_node(
             {
                 "query": resolved_query,
                 "nearby_locales": len(nearby_locales),
-                "detail_candidates": len(top_candidates),
+                "initial_detail_candidates": len(initial_candidates),
+                "expanded_detail_candidates": len(expansion_candidates) if expansion_used else 0,
                 "detail_successes": detail_successes,
                 "detail_errors": detail_errors,
                 "final_results": len(ranked_results),
@@ -207,13 +199,19 @@ def benefits_node(
                 "latitude": latitude,
                 "longitude": longitude,
                 "detail_max_candidates": detail_max_candidates,
+                "detail_expansion_batch": detail_expansion_batch,
+                "min_promo_results": min_promo_results,
                 "max_results": max_results,
             },
             "tool_output": {
                 "results_count": len(ranked_results),
                 "results": ranked_results,
                 "nearby_locales_count": len(nearby_locales),
-                "detail_candidates_count": len(top_candidates),
+                "detail_candidates_count": len(initial_candidates) + (
+                    len(expansion_candidates) if expansion_used else 0
+                ),
+                "initial_detail_candidates_count": len(initial_candidates),
+                "expanded_detail_candidates_count": len(expansion_candidates) if expansion_used else 0,
                 "detail_successes": detail_successes,
                 "intent_context": intent_context,
                 "active_occasion": intent_context.get("active_occasion"),
@@ -309,6 +307,72 @@ def _build_no_locales_state(
         "pending_route": "",
         "error": None,
     }
+
+
+def _fetch_enriched_candidates(
+    candidates: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], int, int]:
+    if not candidates:
+        return [], 0, 0
+
+    enriched_candidates_by_index: dict[int, dict[str, Any]] = {}
+    detail_errors = 0
+    detail_successes = 0
+
+    max_workers = min(4, len(candidates)) or 1
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_map = {
+            executor.submit(get_local_promotions_detail, local["local_id"]): (index, local)
+            for index, local in enumerate(candidates)
+        }
+        for future in as_completed(future_map):
+            index, local = future_map[future]
+            try:
+                local_detail = future.result()
+                detail_successes += 1
+                enriched_candidates_by_index[index] = enrich_local_with_detail(local, local_detail)
+            except Exception as exc:
+                detail_errors += 1
+                log_step(
+                    "BENEFITS",
+                    "No se pudo obtener el detalle de un local",
+                    {
+                        "local_id": local.get("local_id"),
+                        "brand": local.get("brand"),
+                        "error": str(exc),
+                    },
+                )
+                enriched_candidates_by_index[index] = enrich_local_with_detail(local, None)
+
+    enriched_candidates = [
+        enriched_candidates_by_index[index]
+        for index in sorted(enriched_candidates_by_index)
+    ]
+    return enriched_candidates, detail_successes, detail_errors
+
+
+def _rank_benefits_results(
+    *,
+    enriched_candidates: list[dict[str, Any]],
+    resolved_query: str,
+    intent_context: dict[str, Any],
+    max_results: int,
+) -> list[dict[str, Any]]:
+    return rank_enriched_locales(
+        enriched_candidates,
+        query=resolved_query,
+        intent_context=intent_context,
+        max_results=max_results,
+        reference_date=date.today(),
+    )
+
+
+def _count_useful_results(ranked_results: list[dict[str, Any]]) -> int:
+    return sum(
+        1
+        for local in ranked_results
+        if isinstance(local.get("selected_promotion"), dict)
+    )
 
 
 def _build_answer(

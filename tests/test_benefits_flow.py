@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 import importlib
+import os
 import sys
 import types
 from unittest.mock import patch
@@ -135,7 +136,7 @@ class BenefitsFlowTests(unittest.TestCase):
     @patch("agents.benefits.rank_locales")
     @patch("agents.benefits.get_local_promotions_detail")
     @patch("agents.benefits.get_nearby_locales")
-    def test_flow_fetches_detail_only_for_top_candidates(
+    def test_flow_fetches_detail_with_controlled_expansion(
         self,
         nearby_mock,
         detail_mock,
@@ -175,6 +176,59 @@ class BenefitsFlowTests(unittest.TestCase):
         )
 
         self.assertEqual(detail_mock.call_count, 8)
+
+    @patch("agents.benefits.rank_locales")
+    @patch("agents.benefits.get_local_promotions_detail")
+    @patch("agents.benefits.get_nearby_locales")
+    def test_flow_stops_after_initial_detail_candidates_when_enough_promos(
+        self,
+        nearby_mock,
+        detail_mock,
+        rank_mock,
+    ) -> None:
+        locals_payload = [
+            {
+                "local_id": index,
+                "brand": f"Local {index}",
+                "category": "Supermercados",
+                "distance_km": float(index),
+                "city": "San Fernando",
+                "province": "Buenos Aires",
+            }
+            for index in range(1, 9)
+        ]
+        nearby_mock.return_value = locals_payload
+        rank_mock.return_value = locals_payload
+        detail_mock.side_effect = [
+            {
+                "local_id": index,
+                "brand": f"Local {index}",
+                "address": f"Calle {index}, San Fernando",
+                "city": "San Fernando",
+                "province": "Buenos Aires",
+                "promotions": [
+                    {
+                        "discount_percent": 20,
+                        "cashback_cap": 10000,
+                        "days": "Viernes",
+                        "is_eminent": False,
+                        "payment_summary": "Tarjetas Galicia",
+                    }
+                ],
+            }
+            for index in range(1, 6)
+        ]
+
+        with patch.dict(os.environ, {}, clear=False):
+            benefits_node(
+                _base_state(
+                    "supermercados cerca",
+                    route="benefits",
+                    user_location={"latitude": "-34.45", "longitude": "-58.55"},
+                )
+            )
+
+        self.assertEqual(detail_mock.call_count, 5)
 
     @patch("agents.benefits.get_local_promotions_detail")
     @patch("agents.benefits.get_nearby_locales")
