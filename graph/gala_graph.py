@@ -70,7 +70,10 @@ def build_graph(client, retriever, top_k, score_threshold, chat_model):
         return branch_locator_node(state=state)
 
     def benefits_wrapper(state: AgentState):
-        return benefits_node(state=state)
+        return benefits_node(
+            state=state,
+            llm=llm,
+        )
 
     def credit_card_statement_wrapper(state: AgentState):
         return credit_card_statement_node(
