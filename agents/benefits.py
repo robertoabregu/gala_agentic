@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import os
 import re
@@ -132,27 +133,39 @@ def benefits_node(
             max_candidates=detail_max_candidates,
         )[:detail_max_candidates]
 
-        enriched_candidates: list[dict[str, Any]] = []
+        enriched_candidates_by_index: dict[int, dict[str, Any]] = {}
         detail_errors = 0
         detail_successes = 0
 
-        for local in top_candidates:
-            try:
-                local_detail = get_local_promotions_detail(local["local_id"])
-                detail_successes += 1
-                enriched_candidates.append(enrich_local_with_detail(local, local_detail))
-            except Exception as exc:
-                detail_errors += 1
-                log_step(
-                    "BENEFITS",
-                    "No se pudo obtener el detalle de un local",
-                    {
-                        "local_id": local.get("local_id"),
-                        "brand": local.get("brand"),
-                        "error": str(exc),
-                    },
-                )
-                enriched_candidates.append(enrich_local_with_detail(local, None))
+        max_workers = min(4, len(top_candidates)) or 1
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_map = {
+                executor.submit(get_local_promotions_detail, local["local_id"]): (index, local)
+                for index, local in enumerate(top_candidates)
+            }
+            for future in as_completed(future_map):
+                index, local = future_map[future]
+                try:
+                    local_detail = future.result()
+                    detail_successes += 1
+                    enriched_candidates_by_index[index] = enrich_local_with_detail(local, local_detail)
+                except Exception as exc:
+                    detail_errors += 1
+                    log_step(
+                        "BENEFITS",
+                        "No se pudo obtener el detalle de un local",
+                        {
+                            "local_id": local.get("local_id"),
+                            "brand": local.get("brand"),
+                            "error": str(exc),
+                        },
+                    )
+                    enriched_candidates_by_index[index] = enrich_local_with_detail(local, None)
+
+        enriched_candidates = [
+            enriched_candidates_by_index[index]
+            for index in sorted(enriched_candidates_by_index)
+        ]
 
         ranked_results = rank_enriched_locales(
             enriched_candidates,
@@ -552,15 +565,20 @@ def _resolve_benefits_query(
     standalone_question: str,
     memory: dict[str, Any],
 ) -> str:
+    pending_route = str(memory.get("pending_route") or "").strip()
+    pending_query = str(memory.get("pending_query") or "").strip()
+    if pending_route == "benefits" and pending_query:
+        return pending_query
+
     candidate = standalone_question or question
     normalized_candidate = _normalize_text(candidate)
 
     if normalized_candidate in LOCATION_PLACEHOLDER_PATTERNS:
-        memory_question = str(memory.get("last_user_question") or "").strip()
+        memory_question = pending_query or str(memory.get("last_user_question") or "").strip()
         if memory_question:
             return memory_question
 
-    return candidate or str(memory.get("last_user_question") or "").strip() or question
+    return candidate or pending_query or str(memory.get("last_user_question") or "").strip() or question
 
 
 def _coerce_text_response(content: Any) -> str:

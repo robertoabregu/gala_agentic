@@ -57,6 +57,11 @@ Ejemplos para resumen de tarjeta:
   standalone_question: Mostrame los consumos de Maria en el resumen de tarjeta analizado previamente.
 """
 
+LOCATION_PLACEHOLDER_PATTERNS = {
+    "ubicacion compartida por whatsapp",
+    "ubicación compartida por whatsapp",
+}
+
 
 def _has_useful_memory(memory: dict) -> bool:
     return bool(memory.get("last_user_question") or memory.get("last_assistant_answer"))
@@ -97,6 +102,21 @@ def _extract_statement_holders(memory: dict) -> list[str]:
         if str(item.get("titular") or "").strip()
     }
     return sorted(holders)
+
+
+def _is_location_share_handoff(state: AgentState, memory: dict) -> bool:
+    user_location = state.get("user_location") or {}
+    latitude = user_location.get("latitude")
+    longitude = user_location.get("longitude")
+    if not latitude or not longitude:
+        return False
+
+    normalized_question = _normalize_text(state.get("question", ""))
+    if normalized_question not in LOCATION_PLACEHOLDER_PATTERNS:
+        return False
+
+    pending_route = state.get("pending_route") or memory.get("pending_route", "")
+    return pending_route in {"benefits", "branch_locator"}
 
 
 def _rewrite_credit_card_followup(question: str, memory: dict) -> str | None:
@@ -197,6 +217,28 @@ def contextualizer_node(
     if not question:
         log_step("CONTEXTUALIZER", "Pregunta vacia, no se contextualiza")
         return default_state
+
+    if _is_location_share_handoff(state, memory):
+        pending_route = state.get("pending_route") or memory.get("pending_route", "")
+        pending_query = str(memory.get("pending_query") or "").strip()
+        standalone_question = pending_query if pending_route == "benefits" and pending_query else question
+        is_followup = standalone_question != question
+
+        log_step(
+            "CONTEXTUALIZER",
+            "Handoff de ubicacion resuelto sin LLM",
+            {
+                "pending_route": pending_route,
+                "is_followup": is_followup,
+                "standalone": mask_sensitive_text(standalone_question),
+            },
+        )
+        return {
+            **state,
+            "original_question": question,
+            "standalone_question": standalone_question,
+            "is_followup": is_followup,
+        }
 
     if extract_identification(question):
         log_step(

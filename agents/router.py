@@ -182,6 +182,54 @@ BENEFITS_CONTEXT_PATTERNS = (
     "eminent",
 )
 
+BENEFITS_COMMERCE_VERBS = (
+    "comprar",
+    "comprarle",
+    "comprarme",
+    "buscar",
+    "encontrar",
+    "aprovechar",
+    "regalar",
+)
+
+BENEFITS_PRODUCT_HINTS = (
+    "zapatilla",
+    "zapatillas",
+    "botin",
+    "botines",
+    "calzado",
+    "ropa",
+    "ropa deportiva",
+    "supermercado",
+    "supermercados",
+    "hamburguesa",
+    "cafe",
+    "helado",
+    "celular",
+    "notebook",
+    "televisor",
+    "perfume",
+    "farmacia",
+    "muebles",
+    "colchon",
+    "decoracion",
+    "libro",
+    "libros",
+    "mascota",
+    "mascotas",
+    "juguete",
+    "juguetes",
+    "padel",
+)
+
+BENEFITS_LOCATION_HINTS = (
+    "cerca",
+    "cercano",
+    "cercana",
+    "local",
+    "locales",
+)
+
 CREDIT_CARD_STATEMENT_PATTERNS = (
     "resumen de tarjeta",
     "resumen de la tarjeta",
@@ -527,10 +575,33 @@ def _is_benefits_request(normalized_question: str) -> bool:
     if "caja de ahorro" in normalized_question:
         return False
 
+    if _is_benefits_commerce_request(normalized_question):
+        return True
+
     return any(
         _contains_normalized_term(normalized_question, pattern)
         for pattern in BENEFITS_PATTERNS
     )
+
+
+def _is_benefits_commerce_request(normalized_question: str) -> bool:
+    has_product_hint = any(
+        _contains_normalized_term(normalized_question, pattern)
+        for pattern in BENEFITS_PRODUCT_HINTS
+    )
+    if not has_product_hint:
+        return False
+
+    has_commerce_verb = any(
+        _contains_normalized_term(normalized_question, pattern)
+        for pattern in BENEFITS_COMMERCE_VERBS
+    )
+    has_location_hint = any(
+        _contains_normalized_term(normalized_question, pattern)
+        for pattern in BENEFITS_LOCATION_HINTS
+    )
+
+    return has_commerce_verb or has_location_hint
 
 
 def _has_benefits_context(normalized_question: str) -> bool:

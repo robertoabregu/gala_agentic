@@ -197,6 +197,12 @@ def build_initial_state(
     media: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     memory = load_memory(session_id)
+    persisted_location = memory.get("user_location", {})
+    effective_user_location = (
+        user_location
+        if isinstance(user_location, dict) and user_location
+        else persisted_location if isinstance(persisted_location, dict) else {}
+    )
 
     return {
         "session_id": session_id,
@@ -218,7 +224,7 @@ def build_initial_state(
         "tool_output": {},
         "needs_clarification": False,
         "missing_fields": memory.get("missing_fields", []),
-        "user_location": user_location or {},
+        "user_location": effective_user_location,
         "media": media or {},
         "credit_card_statement": memory.get("credit_card_statement", {}),
     }

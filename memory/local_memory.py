@@ -10,12 +10,14 @@ MEMORY_DIR = BASE_DIR / "data" / "memory"
 DEFAULT_MEMORY = {
     "user_name": "",
     "pending_route": "",
+    "pending_query": "",
     "missing_fields": [],
     "last_route": "",
     "last_user_question": "",
     "last_assistant_answer": "",
     "last_topic": "",
     "updated_at": "",
+    "user_location": {},
     "credit_card_statement": {},
 }
 
@@ -48,6 +50,12 @@ def _normalize_memory(memory: dict[str, Any] | None) -> dict[str, Any]:
     normalized["pending_route"] = (
         normalized["pending_route"]
         if isinstance(normalized.get("pending_route"), str)
+        else ""
+    )
+
+    normalized["pending_query"] = (
+        normalized["pending_query"]
+        if isinstance(normalized.get("pending_query"), str)
         else ""
     )
 
@@ -87,6 +95,12 @@ def _normalize_memory(memory: dict[str, Any] | None) -> dict[str, Any]:
         else ""
     )
 
+    normalized["user_location"] = (
+        normalized["user_location"]
+        if isinstance(normalized.get("user_location"), dict)
+        else {}
+    )
+
     normalized["credit_card_statement"] = (
         normalized["credit_card_statement"]
         if isinstance(normalized.get("credit_card_statement"), dict)
@@ -123,6 +137,7 @@ def save_memory(session_id: str, memory: dict[str, Any]) -> None:
 def clear_pending(memory: dict[str, Any]) -> dict[str, Any]:
     updated_memory = _normalize_memory(memory)
     updated_memory["pending_route"] = ""
+    updated_memory["pending_query"] = ""
     updated_memory["missing_fields"] = []
     return updated_memory
 
@@ -131,8 +146,11 @@ def set_pending(
     memory: dict[str, Any],
     route: str,
     missing_fields: list[str],
+    *,
+    pending_query: str = "",
 ) -> dict[str, Any]:
     updated_memory = _normalize_memory(memory)
     updated_memory["pending_route"] = route or ""
+    updated_memory["pending_query"] = pending_query if isinstance(pending_query, str) else ""
     updated_memory["missing_fields"] = [str(field) for field in missing_fields]
     return updated_memory
