@@ -45,6 +45,13 @@ Reglas:
 - Si la nueva pregunta depende del turno anterior, explicita el referente de pronombres como "eso", "asi", "ahi", "lo", "la".
 - Si el turno previo fue sobre BCRA o situacion crediticia, y el follow-up depende de ese resultado, menciona Central de Deudores del BCRA o la situacion informada si corresponde.
 - Si last_route es "credit_card_statement" o last_topic es "resumen_tarjeta", y la pregunta actual depende del resumen ya analizado, converti el follow-up en una pregunta completa sobre el resumen de tarjeta analizado previamente.
+- Si last_route es "loans_rag" o last_topic es "prestamos", y la pregunta actual depende del ultimo producto de prestamos mencionado, converti el follow-up en una pregunta completa que mencione ese producto.
+
+Ejemplos para prestamos:
+- current_question: cuanto es un monto menor?
+  standalone_question: En el prestamo express, cuanto es un monto menor?
+- current_question: y la documentacion?
+  standalone_question: En el prestamo hipotecario uva, cual es la documentacion necesaria?
 
 Ejemplos para resumen de tarjeta:
 - current_question: y en dolares?
@@ -59,7 +66,88 @@ Ejemplos para resumen de tarjeta:
 
 LOCATION_PLACEHOLDER_PATTERNS = {
     "ubicacion compartida por whatsapp",
-    "ubicación compartida por whatsapp",
+}
+
+LOAN_ATTRIBUTE_HINTS = (
+    "monto",
+    "montos",
+    "monto menor",
+    "porcentaje",
+    "plazo",
+    "anos",
+    "dias",
+    "cuota",
+    "cuotas",
+    "tasa",
+    "tasas",
+    "interes",
+    "intereses",
+    "requisito",
+    "requisitos",
+    "documentacion",
+    "solicitar",
+    "pedir",
+    "sacar",
+    "precancel",
+    "cancelar",
+    "amortizacion",
+    "cuanto",
+    "cuantos",
+    "como",
+    "donde",
+)
+
+LOAN_PRODUCT_CONTEXTS = {
+    "prestamo_express": {
+        "patterns": (
+            "prestamo express",
+            "prestamos express",
+        ),
+        "label": "el prestamo express",
+    },
+    "adelanto_sueldo": {
+        "patterns": (
+            "adelanto de sueldo",
+            "adelantos de sueldo",
+        ),
+        "label": "el adelanto de sueldo",
+    },
+    "prestamo_personal": {
+        "patterns": (
+            "prestamo personal",
+            "prestamos personales",
+        ),
+        "label": "el prestamo personal",
+    },
+    "prestamo_hipotecario_uva": {
+        "patterns": (
+            "prestamo hipotecario uva",
+            "prestamos hipotecarios",
+            "hipotecario uva",
+            "prestamo hipotecario",
+        ),
+        "label": "el prestamo hipotecario uva",
+    },
+    "prestamo_prendario": {
+        "patterns": (
+            "prestamo prendario",
+            "prestamos prendarios",
+            "prendario",
+        ),
+        "label": "el prestamo prendario",
+    },
+    "cuotificacion": {
+        "patterns": (
+            "cuotificacion",
+        ),
+        "label": "la cuotificacion",
+    },
+    "refinanciacion": {
+        "patterns": (
+            "refinanciacion",
+        ),
+        "label": "la refinanciacion",
+    },
 }
 
 
@@ -91,6 +179,23 @@ def _has_credit_card_statement_context(memory: dict) -> bool:
     )
 
 
+def _has_loans_context(memory: dict) -> bool:
+    if (
+        memory.get("last_route") == "loans_rag"
+        or memory.get("last_topic") == "prestamos"
+    ):
+        return True
+
+    combined_context = _normalize_text(
+        f"{memory.get('last_user_question', '')} {memory.get('last_assistant_answer', '')}"
+    )
+
+    return any(
+        any(pattern in combined_context for pattern in config["patterns"])
+        for config in LOAN_PRODUCT_CONTEXTS.values()
+    )
+
+
 def _extract_statement_holders(memory: dict) -> list[str]:
     statement = memory.get("credit_card_statement")
     if not isinstance(statement, dict):
@@ -102,6 +207,52 @@ def _extract_statement_holders(memory: dict) -> list[str]:
         if str(item.get("titular") or "").strip()
     }
     return sorted(holders)
+
+
+def _contains_loan_product(text: str) -> bool:
+    return any(
+        any(pattern in text for pattern in config["patterns"])
+        for config in LOAN_PRODUCT_CONTEXTS.values()
+    )
+
+
+def _infer_loan_product_context(memory: dict) -> str:
+    combined_context = _normalize_text(
+        f"{memory.get('last_user_question', '')} {memory.get('last_assistant_answer', '')}"
+    )
+
+    for config in LOAN_PRODUCT_CONTEXTS.values():
+        if any(pattern in combined_context for pattern in config["patterns"]):
+            return config["label"]
+
+    return "los prestamos"
+
+
+def _strip_leading_followup_connector(text: str) -> str:
+    stripped = (text or "").strip()
+    lowered = _normalize_text(stripped)
+
+    for prefix in (
+        "y ",
+        "pero ",
+        "entonces ",
+        "ok ",
+        "dale ",
+        "igual ",
+        "che ",
+    ):
+        if lowered.startswith(prefix):
+            return stripped[len(prefix):].strip()
+
+    return stripped
+
+
+def _lowercase_first_character(text: str) -> str:
+    stripped = (text or "").strip()
+    if not stripped:
+        return stripped
+
+    return stripped[0].lower() + stripped[1:]
 
 
 def _is_location_share_handoff(state: AgentState, memory: dict) -> bool:
@@ -177,6 +328,55 @@ def _rewrite_credit_card_followup(question: str, memory: dict) -> str | None:
             )
 
     return None
+
+
+def _rewrite_loans_followup(question: str, memory: dict) -> str | None:
+    if not _has_loans_context(memory):
+        return None
+
+    normalized_question = _normalize_text(question)
+    if not normalized_question:
+        return None
+
+    if _contains_loan_product(normalized_question):
+        return None
+
+    if any(
+        marker in normalized_question
+        for marker in (
+            "beneficio",
+            "promo",
+            "sucursal",
+            "bcra",
+            "resumen",
+            "tarjeta",
+        )
+    ):
+        return None
+
+    has_attribute_hint = any(
+        hint in normalized_question
+        for hint in LOAN_ATTRIBUTE_HINTS
+    )
+    has_followup_hint = normalized_question.startswith(("y ", "pero ", "entonces "))
+
+    if not has_attribute_hint and not has_followup_hint and len(normalized_question.split()) > 8:
+        return None
+
+    product_context = _infer_loan_product_context(memory)
+
+    if normalized_question in {"documentacion", "la documentacion", "y la documentacion"}:
+        return f"Cual es la documentacion necesaria para {product_context}?"
+
+    if normalized_question in {"requisitos", "los requisitos", "y los requisitos"}:
+        return f"Cuales son los requisitos para {product_context}?"
+
+    stripped_question = _strip_leading_followup_connector(question).rstrip("?.! ")
+    if not stripped_question:
+        return None
+
+    lowered_question = _lowercase_first_character(stripped_question)
+    return f"En {product_context}, {lowered_question}?"
 
 
 def _parse_response(content: str) -> dict:
@@ -264,21 +464,39 @@ def contextualizer_node(
         )
         return default_state
 
-    deterministic_rewrite = _rewrite_credit_card_followup(question, memory)
-    if deterministic_rewrite:
+    credit_card_rewrite = _rewrite_credit_card_followup(question, memory)
+    if credit_card_rewrite:
         log_step(
             "CONTEXTUALIZER",
             "Follow-up de resumen de tarjeta contextualizado por reglas",
             {
                 "original": mask_sensitive_text(question),
                 "is_followup": True,
-                "standalone": mask_sensitive_text(deterministic_rewrite),
+                "standalone": mask_sensitive_text(credit_card_rewrite),
             },
         )
         return {
             **state,
             "original_question": question,
-            "standalone_question": deterministic_rewrite,
+            "standalone_question": credit_card_rewrite,
+            "is_followup": True,
+        }
+
+    loans_rewrite = _rewrite_loans_followup(question, memory)
+    if loans_rewrite:
+        log_step(
+            "CONTEXTUALIZER",
+            "Follow-up de prestamos contextualizado por reglas",
+            {
+                "original": mask_sensitive_text(question),
+                "is_followup": True,
+                "standalone": mask_sensitive_text(loans_rewrite),
+            },
+        )
+        return {
+            **state,
+            "original_question": question,
+            "standalone_question": loans_rewrite,
             "is_followup": True,
         }
 
