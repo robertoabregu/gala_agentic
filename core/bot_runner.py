@@ -5,10 +5,17 @@ from typing import Any
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from core.constants import FALLBACK_ANSWER
 from ingestion.chunker import chunk_documents
 from ingestion.embeddings import create_embeddings, load_documents
 from memory.local_memory import load_memory
+from observability.langfuse_config import safe_score, safe_update_observation
+from observability.metrics import (
+    build_basic_scores,
+    build_final_trace_metadata,
+    build_initial_trace_metadata,
+    duration_ms,
+    now_ms,
+)
 from rag.retriever import LocalFaissRetriever
 
 
@@ -19,6 +26,48 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 DOCUMENTS_PATH = DATA_DIR / "documents.json"
 VECTORSTORE_DIR = DATA_DIR / "vectorstore"
+SCORE_DEFINITIONS = {
+    "total_latency_ms": {
+        "data_type": "NUMERIC",
+        "comment": "Latencia total de la ejecucion del bot en milisegundos.",
+    },
+    "answer_length": {
+        "data_type": "NUMERIC",
+        "comment": "Cantidad de caracteres de la respuesta final.",
+    },
+    "retrieval_docs_count": {
+        "data_type": "NUMERIC",
+        "comment": "Cantidad de documentos recuperados por el retriever.",
+    },
+    "has_context": {
+        "data_type": "BOOLEAN",
+        "comment": "Indica si el sistema construyo contexto RAG.",
+    },
+    "fallback_used": {
+        "data_type": "BOOLEAN",
+        "comment": "Indica si termino usando la respuesta fallback.",
+    },
+    "guardrail_blocked": {
+        "data_type": "BOOLEAN",
+        "comment": "Indica si guardrail modifico o bloqueo la respuesta final.",
+    },
+    "used_rag": {
+        "data_type": "BOOLEAN",
+        "comment": "Indica si la ejecucion utilizo flujo RAG.",
+    },
+    "used_tool": {
+        "data_type": "BOOLEAN",
+        "comment": "Indica si la ejecucion utilizo una tool o integracion.",
+    },
+    "needs_clarification": {
+        "data_type": "BOOLEAN",
+        "comment": "Indica si la respuesta final requiere aclaracion o datos faltantes.",
+    },
+    "execution_error": {
+        "data_type": "BOOLEAN",
+        "comment": "Indica si la ejecucion del grafo termino con error.",
+    },
+}
 
 
 @dataclass
@@ -230,39 +279,28 @@ def build_initial_state(
     }
 
 
-def _score_result(span: Any, result: dict[str, Any]) -> None:
-    docs_count = len(result.get("documents", []))
-    has_context = 1 if result.get("context") else 0
-    fallback_used = 1 if result.get("final_answer") == FALLBACK_ANSWER else 0
-    answer_length = len(result.get("final_answer", ""))
+def _log_observability(message: str) -> None:
+    print(f"[observability] {message}")
 
-    span.score_trace(
-        name="retrieval_docs_count",
-        value=docs_count,
-        data_type="NUMERIC",
-        comment="Cantidad de documentos recuperados por el retriever.",
-    )
 
-    span.score_trace(
-        name="has_context",
-        value=has_context,
-        data_type="BOOLEAN",
-        comment="Indica si el sistema construyo contexto RAG.",
-    )
+def _score_result(span: Any, result: dict[str, Any], total_latency_ms: int | None = None) -> None:
+    scores = build_basic_scores(result, total_latency_ms=total_latency_ms)
+    trace_id = getattr(span, "trace_id", None)
+    scores_sent = 0
 
-    span.score_trace(
-        name="fallback_used",
-        value=fallback_used,
-        data_type="BOOLEAN",
-        comment="Indica si termino usando la respuesta fallback.",
-    )
+    for name, value in scores.items():
+        score_definition = SCORE_DEFINITIONS.get(name, {})
+        if safe_score(
+            span,
+            trace_id,
+            name,
+            value,
+            data_type=score_definition.get("data_type"),
+            comment=score_definition.get("comment"),
+        ):
+            scores_sent += 1
 
-    span.score_trace(
-        name="answer_length",
-        value=answer_length,
-        data_type="NUMERIC",
-        comment="Cantidad de caracteres de la respuesta final.",
-    )
+    _log_observability(f"scores sent={scores_sent}")
 
 
 def run_bot_query(
@@ -279,18 +317,28 @@ def run_bot_query(
     if runtime.graph is None:
         raise RuntimeError("El runtime no fue preparado con un grafo ejecutable.")
 
+    start_ms = now_ms()
+    resolved_langfuse_tags = langfuse_tags or ["gala", "langgraph", "rag", "local-prototype"]
     initial_state = build_initial_state(
         question=question,
         session_id=session_id,
         user_location=user_location,
         media=media,
     )
+    initial_trace_metadata = build_initial_trace_metadata(
+        question=question,
+        user_location=initial_state.get("user_location"),
+        media=media,
+        langfuse_tags=resolved_langfuse_tags,
+        observation_name=observation_name,
+    )
+    app_version = str(initial_trace_metadata.get("app_version") or "").strip() or None
 
     config: dict[str, Any] = {
         "metadata": {
             "langfuse_session_id": session_id,
             "langfuse_user_id": langfuse_user_id or session_id,
-            "langfuse_tags": langfuse_tags or ["gala", "langgraph", "rag", "local-prototype"],
+            "langfuse_tags": resolved_langfuse_tags,
         }
     }
 
@@ -298,14 +346,97 @@ def run_bot_query(
         config["callbacks"] = [runtime.langfuse_handler]
 
     if runtime.langfuse_client:
-        with runtime.langfuse_client.start_as_current_observation(
-            as_type="span",
-            name=observation_name,
-        ) as span:
-            result = runtime.graph.invoke(initial_state, config=config)
-            _score_result(span, result)
+        result: dict[str, Any] | None = None
+        graph_error: Exception | None = None
 
-        runtime.langfuse_client.flush()
+        try:
+            with runtime.langfuse_client.start_as_current_observation(
+                as_type="span",
+                name=observation_name,
+            ) as span:
+                safe_update_observation(
+                    span,
+                    metadata=initial_trace_metadata,
+                    version=app_version,
+                )
+
+                try:
+                    result = runtime.graph.invoke(initial_state, config=config)
+                except Exception as exc:
+                    graph_error = exc
+                    total_latency_ms = duration_ms(start_ms)
+                    final_trace_metadata = build_final_trace_metadata(
+                        initial_state,
+                        total_latency_ms=total_latency_ms,
+                        error=exc,
+                    )
+                    safe_update_observation(
+                        span,
+                        metadata={**initial_trace_metadata, **final_trace_metadata},
+                        level="ERROR",
+                        status_message=type(exc).__name__,
+                        version=app_version,
+                    )
+                    safe_score(
+                        span,
+                        getattr(span, "trace_id", None),
+                        "execution_error",
+                        1,
+                        data_type=SCORE_DEFINITIONS["execution_error"]["data_type"],
+                        comment=SCORE_DEFINITIONS["execution_error"]["comment"],
+                    )
+                    safe_score(
+                        span,
+                        getattr(span, "trace_id", None),
+                        "total_latency_ms",
+                        total_latency_ms,
+                        data_type=SCORE_DEFINITIONS["total_latency_ms"]["data_type"],
+                        comment=SCORE_DEFINITIONS["total_latency_ms"]["comment"],
+                    )
+                    _log_observability(f"total_latency_ms={total_latency_ms}")
+                    raise
+
+                total_latency_ms = duration_ms(start_ms)
+                final_trace_metadata = build_final_trace_metadata(
+                    result,
+                    total_latency_ms=total_latency_ms,
+                )
+                safe_update_observation(
+                    span,
+                    metadata={**initial_trace_metadata, **final_trace_metadata},
+                    version=app_version,
+                )
+                _score_result(span, result, total_latency_ms=total_latency_ms)
+                _log_observability(f"total_latency_ms={total_latency_ms}")
+
+            try:
+                runtime.langfuse_client.flush()
+            except Exception:
+                _log_observability("Langfuse flush skipped")
+
+            if result is not None:
+                return result
+        except Exception:
+            if graph_error is not None:
+                raise
+
+            if result is not None:
+                _log_observability("Langfuse post-processing failed, returning result")
+                return result
+
+            _log_observability("Langfuse span unavailable, continuing without advanced observability")
+
+    try:
+        fallback_config = config
+        if runtime.langfuse_client:
+            fallback_config = dict(config)
+            fallback_config.pop("callbacks", None)
+
+        result = runtime.graph.invoke(initial_state, config=fallback_config)
+        total_latency_ms = duration_ms(start_ms)
+        _log_observability(f"total_latency_ms={total_latency_ms}")
         return result
-
-    return runtime.graph.invoke(initial_state, config=config)
+    except Exception:
+        total_latency_ms = duration_ms(start_ms)
+        _log_observability(f"total_latency_ms={total_latency_ms}")
+        raise

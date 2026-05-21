@@ -30,7 +30,13 @@ Variables opcionales para observabilidad:
 LANGFUSE_SECRET_KEY=...
 LANGFUSE_PUBLIC_KEY=...
 LANGFUSE_HOST=https://cloud.langfuse.com
+LANGFUSE_OBSERVABILITY_ENABLED=true
+APP_ENV=dev
+APP_VERSION=unknown
+GALA_GRAPH_VERSION=gala_graph_v1
 ```
+
+Si `LANGFUSE_OBSERVABILITY_ENABLED=false`, el bot sigue funcionando pero no intenta enviar la capa avanzada de metadata y scores a Langfuse.
 
 ## Uso local
 
