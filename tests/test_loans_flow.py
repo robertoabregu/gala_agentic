@@ -85,7 +85,12 @@ class LoansFlowTests(unittest.TestCase):
                     ),
                 },
             ),
-            llm=ExplodingLLM(),
+            llm=StaticLLM(
+                (
+                    '{"is_followup": true, '
+                    '"standalone_question": "En el prestamo express, cuanto es un monto menor?"}'
+                )
+            ),
         )
 
         self.assertTrue(result["is_followup"])
@@ -105,11 +110,88 @@ class LoansFlowTests(unittest.TestCase):
                     ),
                 },
             ),
-            llm=ExplodingLLM(),
+            llm=StaticLLM(
+                (
+                    '{"is_followup": true, '
+                    '"standalone_question": "Cual es la documentacion necesaria para el prestamo hipotecario uva?"}'
+                )
+            ),
         )
 
         self.assertTrue(result["is_followup"])
         self.assertIn("hipotecario uva", result["standalone_question"].lower())
+
+    def test_contextualizer_does_not_stick_to_loans_when_topic_changes_to_branch_locator(self) -> None:
+        question = "mostrame donde esta la sucu mas cerca"
+        result = contextualizer_node(
+            _base_state(
+                question,
+                memory={
+                    "last_route": "loans_rag",
+                    "last_topic": "prestamos",
+                    "last_user_question": "En el adelanto de sueldo, no se puede pedir el 70%?",
+                    "last_assistant_answer": "Podes pedir hasta el 50% de tu sueldo.",
+                },
+            ),
+            llm=StaticLLM(
+                (
+                    '{"is_followup": false, '
+                    '"standalone_question": "mostrame donde esta la sucu mas cerca"}'
+                )
+            ),
+        )
+
+        self.assertFalse(result["is_followup"])
+        self.assertEqual(result["standalone_question"], question)
+
+    def test_contextualizer_does_not_stick_to_loans_when_topic_changes_to_bcra(self) -> None:
+        question = "quiero saber cual es mi situacion crediticia"
+        result = contextualizer_node(
+            _base_state(
+                question,
+                memory={
+                    "last_route": "loans_rag",
+                    "last_topic": "prestamos",
+                    "last_user_question": "En el adelanto de sueldo, no se puede pedir el 70%?",
+                    "last_assistant_answer": "Podes pedir hasta el 50% de tu sueldo.",
+                },
+            ),
+            llm=StaticLLM(
+                (
+                    '{"is_followup": false, '
+                    '"standalone_question": "quiero saber cual es mi situacion crediticia"}'
+                )
+            ),
+        )
+
+        self.assertFalse(result["is_followup"])
+        self.assertEqual(result["standalone_question"], question)
+
+    def test_contextualizer_supports_credit_card_followup_via_llm(self) -> None:
+        result = contextualizer_node(
+            _base_state(
+                "y en dolares?",
+                memory={
+                    "last_route": "credit_card_statement",
+                    "last_topic": "resumen_tarjeta",
+                    "last_user_question": "Te pase mi resumen de tarjeta",
+                    "last_assistant_answer": "Encontre consumos en pesos y dolares.",
+                    "credit_card_statement": {
+                        "metadata": {"transactions_count": 12},
+                        "transactions": [{"titular": "Maria"}],
+                    },
+                },
+            ),
+            llm=StaticLLM(
+                (
+                    '{"is_followup": true, '
+                    '"standalone_question": "Mostrame los consumos en dolares del resumen de tarjeta analizado previamente."}'
+                )
+            ),
+        )
+
+        self.assertTrue(result["is_followup"])
+        self.assertIn("resumen de tarjeta", result["standalone_question"].lower())
 
     def test_retriever_rescues_borderline_exact_product_match(self) -> None:
         result = retriever_node(
