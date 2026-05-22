@@ -58,6 +58,28 @@ def is_langfuse_observability_enabled() -> bool:
     return raw_value.strip().lower() not in FALSE_ENV_VALUES
 
 
+def is_langfuse_node_observability_enabled() -> bool:
+    if not is_langfuse_observability_enabled():
+        return False
+
+    raw_value = os.getenv("LANGFUSE_NODE_OBSERVABILITY_ENABLED")
+    if raw_value is None:
+        return True
+
+    return raw_value.strip().lower() not in FALSE_ENV_VALUES
+
+
+def is_langfuse_node_score_enabled() -> bool:
+    if not is_langfuse_node_observability_enabled():
+        return False
+
+    raw_value = os.getenv("LANGFUSE_NODE_SCORE_ENABLED")
+    if raw_value is None:
+        return True
+
+    return raw_value.strip().lower() not in FALSE_ENV_VALUES
+
+
 def build_initial_trace_metadata(
     *,
     question: str | None = None,
@@ -103,7 +125,7 @@ def build_final_trace_metadata(
     total_latency_ms: int | None = None,
     error: Any = None,
 ) -> dict[str, Any]:
-    safe_state = state or {}
+    safe_state = _safe_state(state)
     final_route = _final_route(safe_state)
     final_topic = _final_topic(safe_state, final_route)
     used_tool = _used_tool(safe_state, final_route)
@@ -129,7 +151,7 @@ def build_basic_scores(
     state: dict[str, Any] | None,
     total_latency_ms: int | None = None,
 ) -> dict[str, int]:
-    safe_state = state or {}
+    safe_state = _safe_state(state)
     final_route = _final_route(safe_state)
 
     return {
@@ -143,6 +165,84 @@ def build_basic_scores(
         "used_tool": bool_score(_used_tool(safe_state, final_route)),
         "needs_clarification": bool_score(safe_state.get("needs_clarification")),
     }
+
+
+def build_node_start_metadata(
+    node_name: str,
+    state: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    safe_state = _safe_state(state)
+    route = _current_route(safe_state)
+    topic = _current_topic(safe_state, route)
+    used_tool = _used_tool(safe_state, route)
+    metadata = {
+        "node_name": node_name,
+        "node_phase": "start",
+        "route": route,
+        "topic": topic,
+        "used_rag": _used_rag(safe_state, route),
+        "used_tool": used_tool,
+        "tool_name": _tool_name(safe_state, route) if used_tool else "",
+        "documents_count": safe_len(safe_state.get("documents") or []),
+        "fallback": _fallback_used(safe_state, route),
+        "guardrail_blocked": _guardrail_blocked(safe_state, route),
+        "needs_clarification": bool(safe_state.get("needs_clarification")),
+    }
+    metadata.update(_build_node_specific_metadata(node_name, safe_state))
+    return metadata
+
+
+def build_node_end_metadata(
+    node_name: str,
+    state: dict[str, Any] | None = None,
+    latency_ms: int | None = None,
+    error: Any = None,
+) -> dict[str, Any]:
+    safe_state = _safe_state(state)
+    route = _current_route(safe_state)
+    topic = _current_topic(safe_state, route)
+    used_tool = _used_tool(safe_state, route)
+    metadata = {
+        "node_name": node_name,
+        "node_phase": "end",
+        "node_status": "error" if error is not None else "success",
+        "node_latency_ms": max(0, int(latency_ms or 0)),
+        "route": route,
+        "topic": topic,
+        "used_rag": _used_rag(safe_state, route),
+        "used_tool": used_tool,
+        "tool_name": _tool_name(safe_state, route) if used_tool else "",
+        "documents_count": safe_len(safe_state.get("documents") or []),
+        "fallback": _fallback_used(safe_state, route),
+        "guardrail_blocked": _guardrail_blocked(safe_state, route),
+        "needs_clarification": bool(safe_state.get("needs_clarification")),
+        "error": _safe_error_value(error if error is not None else safe_state.get("error")),
+    }
+    metadata.update(_build_node_specific_metadata(node_name, safe_state))
+    return metadata
+
+
+def build_node_scores(
+    node_name: str,
+    state: dict[str, Any] | None = None,
+    latency_ms: int | None = None,
+    error: Any = None,
+) -> dict[str, int]:
+    safe_state = _safe_state(state)
+    route = _current_route(safe_state)
+    scores = {
+        f"{node_name}_latency_ms": max(0, int(latency_ms or 0)),
+        f"{node_name}_success": 0 if error is not None else 1,
+        f"{node_name}_error": 1 if error is not None else 0,
+    }
+    scores.update(_build_node_specific_scores(node_name, safe_state, route))
+    return scores
+
+
+def _safe_state(state: dict[str, Any] | None) -> dict[str, Any]:
+    if isinstance(state, dict):
+        return state
+    return {}
 
 
 def _clean_string(value: Any) -> str:
@@ -253,6 +353,18 @@ def _final_topic(state: dict[str, Any], route: str) -> str:
     return TOPIC_BY_ROUTE.get(route, route or "")
 
 
+def _current_route(state: dict[str, Any]) -> str:
+    return _clean_string(state.get("route"))
+
+
+def _current_topic(state: dict[str, Any], route: str) -> str:
+    topic = _clean_string(state.get("topic"))
+    if topic:
+        return topic
+
+    return TOPIC_BY_ROUTE.get(route, "")
+
+
 def _tool_name(state: dict[str, Any], route: str) -> str:
     tool_name = _clean_string(state.get("tool_name"))
     return tool_name or route
@@ -311,3 +423,121 @@ def _safe_error_value(error: Any) -> str | None:
         return None
 
     return error_text[:200]
+
+
+def _tool_output(state: dict[str, Any]) -> dict[str, Any]:
+    tool_output = state.get("tool_output")
+    if isinstance(tool_output, dict):
+        return tool_output
+    return {}
+
+
+def _tool_output_int(tool_output: dict[str, Any], key: str) -> int:
+    value = tool_output.get(key)
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _has_missing_field(state: dict[str, Any], field_name: str) -> bool:
+    missing_fields = state.get("missing_fields") or []
+    return field_name in missing_fields
+
+
+def _build_node_specific_metadata(
+    node_name: str,
+    state: dict[str, Any],
+) -> dict[str, Any]:
+    if node_name == "router":
+        metadata = {
+            "selected_route": _current_route(state),
+            "is_followup": bool(state.get("is_followup")),
+        }
+        route_source = _clean_string(state.get("route_source"))
+        if route_source:
+            metadata["route_source"] = route_source
+        return metadata
+
+    if node_name == "retriever":
+        context = _clean_string(state.get("context"))
+        documents_count = safe_len(state.get("documents") or [])
+        return {
+            "context_chars": safe_len(context),
+            "has_context": bool(context),
+            "empty_retrieval": documents_count == 0,
+        }
+
+    if node_name == "answer":
+        answer_text = _clean_string(state.get("answer"))
+        return {
+            "answer_chars": safe_len(answer_text),
+            "answer_fallback": answer_text == FALLBACK_ANSWER,
+        }
+
+    if node_name == "benefits":
+        tool_output = _tool_output(state)
+        return {
+            "results_count": _tool_output_int(tool_output, "results_count"),
+            "needs_location": _has_missing_field(state, "user_location"),
+        }
+
+    if node_name == "guardrail":
+        final_answer = _clean_string(state.get("final_answer"))
+        answer = _clean_string(state.get("answer"))
+        return {
+            "replaced_with_fallback": final_answer == FALLBACK_ANSWER and answer != FALLBACK_ANSWER,
+            "replaced_answer": bool(final_answer and final_answer != answer),
+        }
+
+    if node_name in {"branch_locator", "credit_card_statement", "bcra_agent"}:
+        tool_output = _tool_output(state)
+        return {
+            "results_count": _tool_output_int(tool_output, "results_count"),
+        }
+
+    return {}
+
+
+def _build_node_specific_scores(
+    node_name: str,
+    state: dict[str, Any],
+    route: str,
+) -> dict[str, int]:
+    if node_name == "router":
+        return {
+            "router_fallback_used": bool_score(route == "fallback"),
+        }
+
+    if node_name == "retriever":
+        documents_count = safe_len(state.get("documents") or [])
+        return {
+            "retriever_docs_count": documents_count,
+            "retriever_has_context": bool_score(state.get("context")),
+            "retriever_empty_retrieval": bool_score(documents_count == 0),
+            "retriever_context_chars": safe_len(_clean_string(state.get("context"))),
+        }
+
+    if node_name == "answer":
+        answer_text = _clean_string(state.get("answer"))
+        return {
+            "answer_length": safe_len(answer_text),
+            "answer_fallback_used": bool_score(answer_text == FALLBACK_ANSWER),
+            "answer_used_rag": bool_score(_used_rag(state, route)),
+        }
+
+    if node_name == "benefits":
+        tool_output = _tool_output(state)
+        return {
+            "benefits_used_tool": bool_score(_used_tool(state, route)),
+            "benefits_results_count": _tool_output_int(tool_output, "results_count"),
+            "benefits_needs_clarification": bool_score(state.get("needs_clarification")),
+        }
+
+    if node_name == "guardrail":
+        return {
+            "guardrail_blocked": bool_score(_guardrail_blocked(state, route)),
+            "guardrail_fallback_used": bool_score(_final_answer(state) == FALLBACK_ANSWER),
+        }
+
+    return {}

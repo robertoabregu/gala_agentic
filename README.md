@@ -31,12 +31,16 @@ LANGFUSE_SECRET_KEY=...
 LANGFUSE_PUBLIC_KEY=...
 LANGFUSE_HOST=https://cloud.langfuse.com
 LANGFUSE_OBSERVABILITY_ENABLED=true
+LANGFUSE_NODE_OBSERVABILITY_ENABLED=true
+LANGFUSE_NODE_SCORE_ENABLED=true
 APP_ENV=dev
 APP_VERSION=unknown
 GALA_GRAPH_VERSION=gala_graph_v1
 ```
 
 Si `LANGFUSE_OBSERVABILITY_ENABLED=false`, el bot sigue funcionando pero no intenta enviar la capa avanzada de metadata y scores a Langfuse.
+Si `LANGFUSE_NODE_OBSERVABILITY_ENABLED=false`, el bot mantiene la observabilidad general del trace pero no abre spans por nodo.
+Si `LANGFUSE_NODE_SCORE_ENABLED=false`, los spans por nodo pueden seguir existiendo pero sin scores por nodo.
 
 ## Uso local
 

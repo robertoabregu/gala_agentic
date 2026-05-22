@@ -12,7 +12,11 @@ from observability.metrics import (
     build_basic_scores,
     build_final_trace_metadata,
     build_initial_trace_metadata,
+    build_node_end_metadata,
+    build_node_scores,
+    build_node_start_metadata,
 )
+from observability.tracing import node_observability_context, observe_node
 
 
 def _load_bot_runner_module():
@@ -46,12 +50,16 @@ class FakeSpan:
         self.trace_id = "trace-123"
         self.updates: list[dict[str, object]] = []
         self.trace_scores: list[dict[str, object]] = []
+        self.observation_scores: list[dict[str, object]] = []
 
     def update(self, **kwargs) -> None:
         self.updates.append(kwargs)
 
     def score_trace(self, **kwargs) -> None:
         self.trace_scores.append(kwargs)
+
+    def score(self, **kwargs) -> None:
+        self.observation_scores.append(kwargs)
 
 
 class FakeObservationContextManager:
@@ -77,6 +85,16 @@ class FakeLangfuseClient:
 
     def flush(self) -> None:
         self.flush_called = True
+
+
+class RecordingLangfuseClient:
+    def __init__(self) -> None:
+        self.observations: list[dict[str, object]] = []
+
+    def start_as_current_observation(self, **kwargs):
+        span = FakeSpan()
+        self.observations.append({"kwargs": kwargs, "span": span})
+        return FakeObservationContextManager(span)
 
 
 class ObservabilityMetricsTests(unittest.TestCase):
@@ -142,6 +160,128 @@ class ObservabilityMetricsTests(unittest.TestCase):
         self.assertEqual(scores["used_tool"], 1)
         self.assertEqual(scores["used_rag"], 1)
         self.assertEqual(scores["needs_clarification"], 1)
+
+    def test_build_node_metadata_and_scores_for_benefits(self) -> None:
+        state = {
+            "route": "benefits",
+            "topic": "beneficios",
+            "tool_name": "benefits_location_api",
+            "tool_output": {
+                "results_count": 3,
+            },
+            "needs_clarification": True,
+            "missing_fields": ["user_location"],
+            "answer": "respuesta",
+            "final_answer": "respuesta",
+        }
+
+        start_metadata = build_node_start_metadata("benefits", state=state)
+        end_metadata = build_node_end_metadata(
+            "benefits",
+            state=state,
+            latency_ms=456,
+        )
+        scores = build_node_scores("benefits", state=state, latency_ms=456)
+
+        self.assertEqual(start_metadata["node_name"], "benefits")
+        self.assertEqual(start_metadata["results_count"], 3)
+        self.assertTrue(start_metadata["needs_location"])
+        self.assertEqual(end_metadata["node_status"], "success")
+        self.assertEqual(end_metadata["node_latency_ms"], 456)
+        self.assertEqual(end_metadata["tool_name"], "benefits_location_api")
+        self.assertEqual(scores["benefits_latency_ms"], 456)
+        self.assertEqual(scores["benefits_success"], 1)
+        self.assertEqual(scores["benefits_error"], 0)
+        self.assertEqual(scores["benefits_results_count"], 3)
+        self.assertEqual(scores["benefits_used_tool"], 1)
+        self.assertEqual(scores["benefits_needs_clarification"], 1)
+
+
+class NodeTracingTests(unittest.TestCase):
+    def test_observe_node_records_metadata_and_scores(self) -> None:
+        client = RecordingLangfuseClient()
+        wrapped_node = observe_node(
+            "retriever",
+            lambda state: {
+                **state,
+                "route": "loans_rag",
+                "documents": [{"id": 1}, {"id": 2}],
+                "context": "contexto armado",
+            },
+        )
+
+        with patch.dict(
+            "os.environ",
+            {
+                "LANGFUSE_NODE_OBSERVABILITY_ENABLED": "true",
+                "LANGFUSE_NODE_SCORE_ENABLED": "true",
+            },
+            clear=False,
+        ):
+            with node_observability_context(client):
+                result = wrapped_node(
+                    {
+                        "question": "prestamos",
+                        "route": "",
+                        "documents": [],
+                        "context": "",
+                    }
+                )
+
+        self.assertEqual(result["route"], "loans_rag")
+        self.assertEqual(len(client.observations), 1)
+
+        observation = client.observations[0]
+        start_metadata = observation["kwargs"]["metadata"]
+        end_metadata = observation["span"].updates[-1]["metadata"]
+        score_values = {
+            score["name"]: score["value"]
+            for score in observation["span"].observation_scores
+        }
+
+        self.assertEqual(observation["kwargs"]["name"], "retriever")
+        self.assertEqual(start_metadata["node_name"], "retriever")
+        self.assertEqual(end_metadata["node_status"], "success")
+        self.assertEqual(end_metadata["documents_count"], 2)
+        self.assertTrue(end_metadata["has_context"])
+        self.assertIn("retriever_latency_ms", score_values)
+        self.assertEqual(score_values["retriever_success"], 1)
+        self.assertEqual(score_values["retriever_error"], 0)
+        self.assertEqual(score_values["retriever_docs_count"], 2)
+        self.assertEqual(score_values["retriever_has_context"], 1)
+
+    def test_observe_node_reraises_functional_error_and_scores_it(self) -> None:
+        client = RecordingLangfuseClient()
+
+        def failing_node(state):
+            raise ValueError("boom")
+
+        wrapped_node = observe_node("router", failing_node)
+
+        with patch.dict(
+            "os.environ",
+            {
+                "LANGFUSE_NODE_OBSERVABILITY_ENABLED": "true",
+                "LANGFUSE_NODE_SCORE_ENABLED": "true",
+            },
+            clear=False,
+        ):
+            with node_observability_context(client):
+                with self.assertRaises(ValueError):
+                    wrapped_node({"question": "hola", "route": ""})
+
+        self.assertEqual(len(client.observations), 1)
+        observation = client.observations[0]
+        end_metadata = observation["span"].updates[-1]["metadata"]
+        score_values = {
+            score["name"]: score["value"]
+            for score in observation["span"].observation_scores
+        }
+
+        self.assertEqual(end_metadata["node_status"], "error")
+        self.assertTrue(str(end_metadata["error"]).startswith("ValueError"))
+        self.assertEqual(score_values["router_success"], 0)
+        self.assertEqual(score_values["router_error"], 1)
 
 
 class BotRunnerObservabilityTests(unittest.TestCase):

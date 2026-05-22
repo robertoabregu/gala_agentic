@@ -16,6 +16,7 @@ from observability.metrics import (
     duration_ms,
     now_ms,
 )
+from observability.tracing import node_observability_context
 from rag.retriever import LocalFaissRetriever
 
 
@@ -361,7 +362,8 @@ def run_bot_query(
                 )
 
                 try:
-                    result = runtime.graph.invoke(initial_state, config=config)
+                    with node_observability_context(runtime.langfuse_client):
+                        result = runtime.graph.invoke(initial_state, config=config)
                 except Exception as exc:
                     graph_error = exc
                     total_latency_ms = duration_ms(start_ms)

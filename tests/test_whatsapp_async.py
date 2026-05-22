@@ -57,7 +57,7 @@ class WhatsAppAsyncTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         response_text = response.data.decode("utf-8")
-        self.assertIn("Estoy buscando opciones con beneficios Galicia", response_text)
+        self.assertIn(whatsapp_app._ack_message(), response_text)
         submit_mock.assert_called_once()
         run_bot_query_mock.assert_not_called()
 
@@ -103,11 +103,11 @@ class WhatsAppAsyncTests(unittest.TestCase):
         self.assertEqual(first_response.status_code, 200)
         self.assertEqual(second_response.status_code, 200)
         self.assertIn(
-            "Estoy buscando opciones con beneficios Galicia",
+            whatsapp_app._ack_message(),
             first_response.data.decode("utf-8"),
         )
         self.assertNotIn(
-            "Estoy buscando opciones con beneficios Galicia",
+            whatsapp_app._ack_message(),
             second_response.data.decode("utf-8"),
         )
         self.assertEqual(submit_mock.call_count, 1)

@@ -82,6 +82,7 @@ def safe_score(
     data_type: str | None = None,
     comment: str | None = None,
     metadata: dict[str, Any] | None = None,
+    scope: str = "trace",
 ) -> bool:
     if langfuse_target is None or not name:
         return False
@@ -99,6 +100,10 @@ def safe_score(
         kwargs["metadata"] = metadata
 
     try:
+        if scope == "observation" and hasattr(langfuse_target, "score"):
+            langfuse_target.score(**kwargs)
+            return True
+
         if hasattr(langfuse_target, "score_trace"):
             langfuse_target.score_trace(**kwargs)
             return True
