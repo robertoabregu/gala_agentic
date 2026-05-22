@@ -8,6 +8,7 @@ from openai import OpenAI
 from ingestion.chunker import chunk_documents
 from ingestion.embeddings import create_embeddings, load_documents
 from memory.local_memory import load_memory
+from observability.evaluators import QUALITY_SCORE_DEFINITIONS, run_quality_evaluation
 from observability.langfuse_config import safe_score, safe_update_observation
 from observability.metrics import (
     build_basic_scores,
@@ -284,13 +285,20 @@ def _log_observability(message: str) -> None:
     print(f"[observability] {message}")
 
 
-def _score_result(span: Any, result: dict[str, Any], total_latency_ms: int | None = None) -> None:
-    scores = build_basic_scores(result, total_latency_ms=total_latency_ms)
+def _log_quality_eval(message: str) -> None:
+    print(f"[quality-eval] {message}")
+
+
+def _send_trace_scores(
+    span: Any,
+    scores: dict[str, Any],
+    score_definitions: dict[str, dict[str, str]],
+) -> int:
     trace_id = getattr(span, "trace_id", None)
     scores_sent = 0
 
     for name, value in scores.items():
-        score_definition = SCORE_DEFINITIONS.get(name, {})
+        score_definition = score_definitions.get(name, {})
         if safe_score(
             span,
             trace_id,
@@ -301,6 +309,12 @@ def _score_result(span: Any, result: dict[str, Any], total_latency_ms: int | Non
         ):
             scores_sent += 1
 
+    return scores_sent
+
+
+def _score_result(span: Any, result: dict[str, Any], total_latency_ms: int | None = None) -> None:
+    scores = build_basic_scores(result, total_latency_ms=total_latency_ms)
+    scores_sent = _send_trace_scores(span, scores, SCORE_DEFINITIONS)
     _log_observability(f"scores sent={scores_sent}")
 
 
@@ -403,12 +417,63 @@ def run_bot_query(
                     result,
                     total_latency_ms=total_latency_ms,
                 )
+                quality_payload = {
+                    "scores": {},
+                    "metadata": {
+                        "quality_eval_enabled": False,
+                        "llm_judge_enabled": False,
+                        "judge_model": "",
+                        "needs_human_review": 0,
+                        "dataset_candidate": 0,
+                        "quality_eval_error": None,
+                        "quality_reason_short": None,
+                    },
+                    "llm_judge_ran": False,
+                    "llm_judge_result": {"skipped": True},
+                }
+                try:
+                    quality_payload = run_quality_evaluation(
+                        result,
+                        client=runtime.client,
+                    )
+                except Exception as exc:
+                    quality_payload["metadata"] = {
+                        **quality_payload["metadata"],
+                        "quality_eval_error": f"{type(exc).__name__}: {str(exc)}"[:160],
+                    }
+
                 safe_update_observation(
                     span,
-                    metadata={**initial_trace_metadata, **final_trace_metadata},
+                    metadata={
+                        **initial_trace_metadata,
+                        **final_trace_metadata,
+                        **quality_payload.get("metadata", {}),
+                    },
                     version=app_version,
                 )
                 _score_result(span, result, total_latency_ms=total_latency_ms)
+                quality_scores = quality_payload.get("scores", {})
+                if quality_scores:
+                    quality_scores_sent = _send_trace_scores(
+                        span,
+                        quality_scores,
+                        QUALITY_SCORE_DEFINITIONS,
+                    )
+                    _log_quality_eval("programmatic scores sent")
+                    if quality_payload.get("llm_judge_ran"):
+                        _log_quality_eval("llm judge scores sent")
+                    else:
+                        _log_quality_eval("llm judge skipped")
+                    _log_quality_eval(
+                        "needs_human_review="
+                        f"{quality_payload['metadata'].get('needs_human_review', 0)} "
+                        "dataset_candidate="
+                        f"{quality_payload['metadata'].get('dataset_candidate', 0)}"
+                    )
+                    _log_observability(f"quality_scores_sent={quality_scores_sent}")
+                else:
+                    _log_quality_eval("programmatic scores skipped")
+                    _log_quality_eval("llm judge skipped")
                 _log_observability(f"total_latency_ms={total_latency_ms}")
 
             try:

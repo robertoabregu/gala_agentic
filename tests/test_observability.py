@@ -8,6 +8,13 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from core.constants import FALLBACK_ANSWER
+from observability.evaluators import (
+    build_quality_metadata,
+    build_quality_scores,
+    evaluate_basic_quality_signals,
+    evaluate_whatsapp_format,
+    run_quality_evaluation,
+)
 from observability.metrics import (
     build_basic_scores,
     build_final_trace_metadata,
@@ -197,6 +204,68 @@ class ObservabilityMetricsTests(unittest.TestCase):
         self.assertEqual(scores["benefits_needs_clarification"], 1)
 
 
+class QualityEvaluatorTests(unittest.TestCase):
+    def test_evaluate_whatsapp_format_detects_common_issues(self) -> None:
+        result = evaluate_whatsapp_format(
+            "**Hola**\n\n\n"
+            "*Titulo\n"
+            "```python\nprint('x')\n```"
+        )
+
+        self.assertEqual(result["whatsapp_format_ok"], 0)
+        self.assertEqual(result["whatsapp_has_double_asterisk"], 1)
+        self.assertEqual(result["whatsapp_has_broken_bold"], 1)
+        self.assertEqual(result["whatsapp_has_code_block"], 1)
+        self.assertGreaterEqual(result["whatsapp_format_issues_count"], 3)
+
+    def test_build_quality_scores_uses_programmatic_signals_when_judge_is_disabled(self) -> None:
+        state = {
+            "question": "Quiero saber sobre prestamos personales",
+            "route": "fallback",
+            "answer": FALLBACK_ANSWER,
+            "final_answer": FALLBACK_ANSWER,
+            "documents": [],
+            "context": "",
+            "needs_clarification": False,
+        }
+
+        basic_signals = evaluate_basic_quality_signals(state)
+        scores = build_quality_scores(state, basic_signals=basic_signals)
+        metadata = build_quality_metadata(state, basic_signals=basic_signals, quality_scores=scores)
+
+        self.assertEqual(scores["likely_low_value_answer"], 1)
+        self.assertEqual(scores["needs_human_review"], 1)
+        self.assertEqual(scores["dataset_candidate"], 1)
+        self.assertNotIn("routing_correctness", scores)
+        self.assertEqual(metadata["needs_human_review"], 1)
+        self.assertEqual(metadata["dataset_candidate"], 1)
+
+    def test_run_quality_evaluation_skips_llm_judge_by_default(self) -> None:
+        state = {
+            "question": "Hola",
+            "route": "chitchat",
+            "answer": "Hola, soy Gala.",
+            "final_answer": "Hola, soy Gala.",
+            "documents": [],
+            "context": "",
+        }
+
+        with patch.dict(
+            "os.environ",
+            {
+                "LANGFUSE_QUALITY_EVAL_ENABLED": "true",
+                "LLM_JUDGE_ENABLED": "false",
+            },
+            clear=False,
+        ):
+            result = run_quality_evaluation(state, client=None)
+
+        self.assertIn("whatsapp_format_ok", result["scores"])
+        self.assertEqual(result["metadata"]["quality_eval_enabled"], True)
+        self.assertEqual(result["metadata"]["llm_judge_enabled"], False)
+        self.assertFalse(result["llm_judge_ran"])
+
+
 class NodeTracingTests(unittest.TestCase):
     def test_observe_node_records_metadata_and_scores(self) -> None:
         client = RecordingLangfuseClient()
@@ -299,6 +368,7 @@ class BotRunnerObservabilityTests(unittest.TestCase):
         )
         runtime = SimpleNamespace(
             graph=graph,
+            client=None,
             langfuse_handler=None,
             langfuse_client=BrokenLangfuseClient(),
             settings=SimpleNamespace(),
@@ -333,21 +403,30 @@ class BotRunnerObservabilityTests(unittest.TestCase):
         langfuse_client = FakeLangfuseClient()
         runtime = SimpleNamespace(
             graph=graph,
+            client=None,
             langfuse_handler="handler",
             langfuse_client=langfuse_client,
             settings=SimpleNamespace(),
         )
 
-        with patch.object(bot_runner, "load_memory", return_value={}):
-            result = bot_runner.run_bot_query(
-                runtime=runtime,
-                question="beneficios cerca",
-                session_id="whatsapp-1",
-                langfuse_tags=["gala", "whatsapp"],
-                observation_name="gala-whatsapp-request",
-                user_location={"latitude": "-34.5", "longitude": "-58.4"},
-                media={"content_type": "application/pdf", "filename": "statement.pdf"},
-            )
+        with patch.dict(
+            "os.environ",
+            {
+                "LANGFUSE_QUALITY_EVAL_ENABLED": "true",
+                "LLM_JUDGE_ENABLED": "false",
+            },
+            clear=False,
+        ):
+            with patch.object(bot_runner, "load_memory", return_value={}):
+                result = bot_runner.run_bot_query(
+                    runtime=runtime,
+                    question="beneficios cerca",
+                    session_id="whatsapp-1",
+                    langfuse_tags=["gala", "whatsapp"],
+                    observation_name="gala-whatsapp-request",
+                    user_location={"latitude": "-34.5", "longitude": "-58.4"},
+                    media={"content_type": "application/pdf", "filename": "statement.pdf"},
+                )
 
         self.assertEqual(result["final_answer"], "respuesta final")
         self.assertTrue(langfuse_client.flush_called)
@@ -363,12 +442,18 @@ class BotRunnerObservabilityTests(unittest.TestCase):
         self.assertEqual(first_metadata["media_type"], "pdf")
         self.assertEqual(final_metadata["final_route"], "benefits")
         self.assertEqual(final_metadata["tool_name"], "benefits_location_api")
+        self.assertEqual(final_metadata["quality_eval_enabled"], True)
+        self.assertEqual(final_metadata["llm_judge_enabled"], False)
         self.assertIn("retrieval_docs_count", score_names)
         self.assertIn("has_context", score_names)
         self.assertIn("fallback_used", score_names)
         self.assertIn("answer_length", score_names)
         self.assertIn("total_latency_ms", score_names)
         self.assertIn("used_tool", score_names)
+        self.assertIn("whatsapp_format_ok", score_names)
+        self.assertIn("likely_low_value_answer", score_names)
+        self.assertIn("needs_human_review", score_names)
+        self.assertIn("dataset_candidate", score_names)
 
 
 if __name__ == "__main__":

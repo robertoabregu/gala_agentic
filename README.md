@@ -33,6 +33,11 @@ LANGFUSE_HOST=https://cloud.langfuse.com
 LANGFUSE_OBSERVABILITY_ENABLED=true
 LANGFUSE_NODE_OBSERVABILITY_ENABLED=true
 LANGFUSE_NODE_SCORE_ENABLED=true
+LANGFUSE_QUALITY_EVAL_ENABLED=true
+LLM_JUDGE_ENABLED=false
+OPENAI_MODEL_JUDGE=
+LLM_JUDGE_MAX_INPUT_CHARS=1000
+LLM_JUDGE_MAX_CONTEXT_CHARS=2000
 APP_ENV=dev
 APP_VERSION=unknown
 GALA_GRAPH_VERSION=gala_graph_v1
@@ -41,6 +46,8 @@ GALA_GRAPH_VERSION=gala_graph_v1
 Si `LANGFUSE_OBSERVABILITY_ENABLED=false`, el bot sigue funcionando pero no intenta enviar la capa avanzada de metadata y scores a Langfuse.
 Si `LANGFUSE_NODE_OBSERVABILITY_ENABLED=false`, el bot mantiene la observabilidad general del trace pero no abre spans por nodo.
 Si `LANGFUSE_NODE_SCORE_ENABLED=false`, los spans por nodo pueden seguir existiendo pero sin scores por nodo.
+Si `LANGFUSE_QUALITY_EVAL_ENABLED=false`, se desactiva la capa de evaluacion de calidad.
+Si `LLM_JUDGE_ENABLED=false`, solo corren los evaluadores programaticos y no hay costo adicional de judge por LLM.
 
 ## Uso local
 
