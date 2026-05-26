@@ -55,6 +55,16 @@ Si `LANGFUSE_SESSION_METRICS_ENABLED=false`, no se envian scores numéricos agre
 Si `LANGFUSE_SESSION_CATEGORICAL_ENABLED=false`, no se envian scores categóricos de sesion como `session_status`, `session_primary_route` o `session_complexity`.
 Si `LLM_JUDGE_ENABLED=false`, solo corren los evaluadores programaticos y no hay costo adicional de judge por LLM.
 
+Variables opcionales para WhatsApp:
+
+```bash
+WHATSAPP_ASYNC_MAX_WORKERS=4
+WHATSAPP_INBOUND_DEDUPE_TTL_SECONDS=1800
+WHATSAPP_SESSION_TTL_SECONDS=900
+```
+
+`WHATSAPP_SESSION_TTL_SECONDS` controla la duracion de la sesion conversacional de WhatsApp por inactividad. El `user_id` se mantiene estable por numero normalizado, por ejemplo `whatsapp-5491125456750`, mientras que el `session_id` conversacional rota por charla, por ejemplo `whatsapp-5491125456750-20260525-190502-a8f3`. Ese `session_id` es el que usa la memoria local del bot y el `langfuse_session_id`, mientras que Langfuse sigue recibiendo el numero normalizado como `langfuse_user_id`.
+
 ## Uso local
 
 ```bash
@@ -101,6 +111,7 @@ No se versionan archivos locales o sensibles:
 
 - `.env`
 - `data/memory/`
+- `data/session_store/`
 - `data/vectorstore/`
 - `__pycache__/`
 - `.vscode/`

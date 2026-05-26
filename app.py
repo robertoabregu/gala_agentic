@@ -1,8 +1,10 @@
 import os
 import re
+import secrets
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from pathlib import PurePosixPath
 
 from flask import Flask, Response, jsonify, request
@@ -12,6 +14,7 @@ from agents.router import _has_benefits_context, _is_benefits_request, _normaliz
 from core.bot_runner import BotRuntime, prepare_runtime, run_bot_query
 from core.privacy import mask_sensitive_text
 from memory.local_memory import load_memory
+from memory.session_store import get_or_create_conversation_session
 from services.twilio_media import build_media_payload, looks_like_pdf_media
 from services.twilio_messages import send_whatsapp_message
 from services.twilio_typing import send_whatsapp_typing_indicator
@@ -45,7 +48,7 @@ def get_runtime() -> BotRuntime:
     return _runtime
 
 
-def sanitize_whatsapp_session_id(sender: str) -> str:
+def sanitize_whatsapp_user_id(sender: str) -> str:
     digits = re.sub(r"\D", "", sender or "")
     if digits:
         return f"whatsapp-{digits}"
@@ -53,6 +56,24 @@ def sanitize_whatsapp_session_id(sender: str) -> str:
     cleaned = re.sub(r"[^A-Za-z0-9._-]", "-", (sender or "").strip())
     cleaned = cleaned.strip("-")
     return f"whatsapp-{cleaned}" if cleaned else "whatsapp-anonymous"
+
+
+sanitize_whatsapp_session_id = sanitize_whatsapp_user_id
+
+
+def _build_fallback_conversation_session_id(user_id: str) -> str:
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    return f"{user_id}-{timestamp}-{secrets.token_hex(2)}"
+
+
+def _resolve_conversation_session_id(user_id: str) -> str:
+    try:
+        return get_or_create_conversation_session(user_id)
+    except Exception as exc:
+        print("\n[WHATSAPP] Session store unavailable, using fallback session")
+        print(f"  - user_id: {user_id}")
+        print(f"  - error: {type(exc).__name__}: {str(exc)}")
+        return _build_fallback_conversation_session_id(user_id)
 
 
 def twiml_message(body: str = "", status_code: int = 200, media_url: str | None = None) -> Response:
@@ -210,6 +231,7 @@ def _run_and_format_bot_reply(
     *,
     body: str,
     session_id: str,
+    user_id: str,
     user_location: dict[str, str],
     media: dict[str, str],
 ) -> tuple[dict[str, object], str]:
@@ -217,7 +239,7 @@ def _run_and_format_bot_reply(
         runtime=get_runtime(),
         question=body,
         session_id=session_id,
-        langfuse_user_id=session_id,
+        langfuse_user_id=user_id,
         langfuse_tags=["gala", "langgraph", "rag", "whatsapp"],
         observation_name="gala-whatsapp-request",
         user_location=user_location,
@@ -236,6 +258,7 @@ def _process_whatsapp_request_async(
     *,
     body: str,
     sender: str,
+    user_id: str,
     session_id: str,
     message_sid: str,
     user_location: dict[str, str],
@@ -245,6 +268,7 @@ def _process_whatsapp_request_async(
         _result, formatted_answer = _run_and_format_bot_reply(
             body=body,
             session_id=session_id,
+            user_id=user_id,
             user_location=dict(user_location),
             media=dict(media),
         )
@@ -256,6 +280,8 @@ def _process_whatsapp_request_async(
             )
     except Exception as exc:
         print("\n[WHATSAPP] Error procesando mensaje async")
+        print(f"  - user_id: {user_id}")
+        print(f"  - session_id: {session_id}")
         print(f"  - error: {str(exc)}")
         print(f"  - body: {mask_sensitive_text(body)}")
         try:
@@ -277,6 +303,7 @@ def _submit_async_whatsapp_job(
     *,
     body: str,
     sender: str,
+    user_id: str,
     session_id: str,
     message_sid: str,
     user_location: dict[str, str],
@@ -286,6 +313,7 @@ def _submit_async_whatsapp_job(
         _process_whatsapp_request_async,
         body=body,
         sender=sender,
+        user_id=user_id,
         session_id=session_id,
         message_sid=message_sid,
         user_location=dict(user_location),
@@ -307,7 +335,8 @@ def handle_whatsapp_message() -> Response:
     body = (request.form.get("Body") or "").strip()
     sender = (request.form.get("From") or "").strip()
     message_sid = (request.form.get("MessageSid") or "").strip()
-    session_id = sanitize_whatsapp_session_id(sender)
+    user_id = sanitize_whatsapp_user_id(sender)
+    session_id = _resolve_conversation_session_id(user_id)
 
     latitude = (request.form.get("Latitude") or "").strip()
     longitude = (request.form.get("Longitude") or "").strip()
@@ -338,7 +367,8 @@ def handle_whatsapp_message() -> Response:
             return twiml_message("No recibí tu mensaje. Probá de nuevo, por favor.")
 
         print("\n[WHATSAPP] Mensaje recibido")
-        print(f"  - from: {session_id}")
+        print(f"  - user_id: {user_id}")
+        print(f"  - session_id: {session_id}")
         print(f"  - body: {mask_sensitive_text(body)}")
 
         if user_location:
@@ -361,6 +391,7 @@ def handle_whatsapp_message() -> Response:
                 _submit_async_whatsapp_job(
                     body=body,
                     sender=sender,
+                    user_id=user_id,
                     session_id=session_id,
                     message_sid=message_sid,
                     user_location=user_location,
@@ -379,6 +410,7 @@ def handle_whatsapp_message() -> Response:
         _result, formatted_answer = _run_and_format_bot_reply(
             body=body,
             session_id=session_id,
+            user_id=user_id,
             user_location=user_location,
             media=media,
         )
@@ -386,6 +418,8 @@ def handle_whatsapp_message() -> Response:
 
     except Exception as exc:
         print("\n[WHATSAPP] Error procesando mensaje")
+        print(f"  - user_id: {user_id}")
+        print(f"  - session_id: {session_id}")
         print(f"  - error: {str(exc)}")
         print(f"  - body: {mask_sensitive_text(body)}")
         return twiml_message(
