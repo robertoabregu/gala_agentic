@@ -3,7 +3,12 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any, Callable
 
-from observability.langfuse_config import safe_score, safe_update_observation
+from observability.langfuse_config import (
+    safe_boolean_score,
+    safe_numeric_score,
+    safe_score,
+    safe_update_observation,
+)
 from observability.metrics import (
     build_node_end_metadata,
     build_node_scores,
@@ -197,6 +202,28 @@ def _send_node_scores(
 
     for score_name, score_value in scores.items():
         score_type = _infer_score_type(score_name)
+        if score_type == "NUMERIC":
+            safe_numeric_score(
+                observation,
+                getattr(observation, "trace_id", None),
+                score_name,
+                score_value,
+                comment=_build_score_comment(node_name, score_name),
+                scope="observation",
+            )
+            continue
+
+        if score_type == "BOOLEAN":
+            safe_boolean_score(
+                observation,
+                getattr(observation, "trace_id", None),
+                score_name,
+                score_value,
+                comment=_build_score_comment(node_name, score_name),
+                scope="observation",
+            )
+            continue
+
         safe_score(
             observation,
             getattr(observation, "trace_id", None),

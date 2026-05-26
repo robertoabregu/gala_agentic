@@ -77,7 +77,7 @@ def safe_score(
     langfuse_target: Any,
     trace_id: str | None,
     name: str,
-    value: int | float | str,
+    value: int | float | str | bool,
     *,
     data_type: str | None = None,
     comment: str | None = None,
@@ -119,3 +119,103 @@ def safe_score(
         return False
 
     return False
+
+
+def safe_numeric_score(
+    langfuse_target: Any,
+    trace_id: str | None,
+    name: str,
+    value: Any,
+    *,
+    comment: str | None = None,
+    metadata: dict[str, Any] | None = None,
+    scope: str = "trace",
+) -> bool:
+    try:
+        if value is None or value == "":
+            return False
+        numeric_value = float(value)
+        if numeric_value.is_integer():
+            numeric_value = int(numeric_value)
+    except (TypeError, ValueError):
+        return False
+
+    return safe_score(
+        langfuse_target,
+        trace_id,
+        name,
+        numeric_value,
+        data_type="NUMERIC",
+        comment=comment,
+        metadata=metadata,
+        scope=scope,
+    )
+
+
+def safe_boolean_score(
+    langfuse_target: Any,
+    trace_id: str | None,
+    name: str,
+    value: Any,
+    *,
+    comment: str | None = None,
+    metadata: dict[str, Any] | None = None,
+    scope: str = "trace",
+) -> bool:
+    normalized_value = _normalize_bool_score_value(value)
+    if normalized_value is None:
+        return False
+
+    return safe_score(
+        langfuse_target,
+        trace_id,
+        name,
+        normalized_value,
+        data_type="BOOLEAN",
+        comment=comment,
+        metadata=metadata,
+        scope=scope,
+    )
+
+
+def safe_categorical_score(
+    langfuse_target: Any,
+    trace_id: str | None,
+    name: str,
+    value: Any,
+    *,
+    comment: str | None = None,
+    metadata: dict[str, Any] | None = None,
+    scope: str = "trace",
+) -> bool:
+    normalized_value = str(value or "").strip()
+    if not normalized_value:
+        return False
+
+    return safe_score(
+        langfuse_target,
+        trace_id,
+        name,
+        normalized_value,
+        data_type="CATEGORICAL",
+        comment=comment,
+        metadata=metadata,
+        scope=scope,
+    )
+
+
+def _normalize_bool_score_value(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return 1 if value else 0
+
+    if isinstance(value, (int, float)):
+        return 1 if value else 0
+
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"1", "true", "yes", "on"}:
+            return 1
+        if lowered in {"0", "false", "no", "off"}:
+            return 0
+
+    return None

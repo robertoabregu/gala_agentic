@@ -16,12 +16,22 @@ from observability.evaluators import (
     run_quality_evaluation,
 )
 from observability.metrics import (
+    build_categorical_scores,
     build_basic_scores,
+    build_conversation_outcome,
     build_final_trace_metadata,
     build_initial_trace_metadata,
     build_node_end_metadata,
     build_node_scores,
     build_node_start_metadata,
+    build_quality_status,
+)
+from observability.session_metrics import (
+    build_session_categorical_scores,
+    build_session_debug_payload,
+    build_session_numeric_scores,
+    reset_session_metrics,
+    update_session_metrics,
 )
 from observability.tracing import node_observability_context, observe_node
 
@@ -203,6 +213,76 @@ class ObservabilityMetricsTests(unittest.TestCase):
         self.assertEqual(scores["benefits_used_tool"], 1)
         self.assertEqual(scores["benefits_needs_clarification"], 1)
 
+    def test_build_categorical_scores_normalizes_route_topic_and_outcome(self) -> None:
+        state = {
+            "route": "bcra_credit_status",
+            "topic": "situacion_crediticia_bcra",
+            "tool_name": "bcra_credit_status",
+            "tool_output": {},
+            "needs_clarification": True,
+            "missing_fields": ["identificacion"],
+            "answer": "Necesito tu CUIT o CUIL.",
+            "final_answer": "Necesito tu CUIT o CUIL.",
+        }
+
+        categorical_scores = build_categorical_scores(
+            state,
+            initial_metadata={"channel": "whatsapp", "environment": "prod"},
+            final_metadata={
+                "final_route": "bcra_credit_status",
+                "final_topic": "situacion_crediticia_bcra",
+                "used_tool": 1,
+                "used_rag": 0,
+                "needs_clarification": 1,
+                "fallback_used": 0,
+                "guardrail_blocked": 0,
+            },
+        )
+
+        self.assertEqual(categorical_scores["conversation_route"], "bcra_agent")
+        self.assertEqual(categorical_scores["conversation_topic"], "situacion_crediticia")
+        self.assertEqual(categorical_scores["conversation_channel"], "whatsapp")
+        self.assertEqual(categorical_scores["conversation_environment"], "prod")
+        self.assertEqual(categorical_scores["conversation_tool_status"], "tool_needs_clarification")
+        self.assertEqual(categorical_scores["conversation_quality_status"], "healthy")
+        self.assertEqual(categorical_scores["conversation_outcome"], "bcra_agent_needs_clarification")
+
+    def test_build_categorical_scores_detects_rag_without_context(self) -> None:
+        state = {
+            "route": "loans_rag",
+            "topic": "prestamos",
+            "documents": [],
+            "context": "",
+            "answer": "Respuesta sin contexto.",
+            "final_answer": "Respuesta sin contexto.",
+        }
+
+        categorical_scores = build_categorical_scores(
+            state,
+            initial_metadata={"channel": "api", "environment": "staging"},
+            final_metadata={
+                "final_route": "loans_rag",
+                "final_topic": "prestamos",
+                "used_rag": 1,
+                "has_context": 0,
+                "documents_count": 0,
+                "fallback_used": 0,
+                "guardrail_blocked": 0,
+            },
+        )
+
+        self.assertEqual(categorical_scores["conversation_route"], "rag")
+        self.assertEqual(categorical_scores["conversation_rag_status"], "rag_without_context")
+        self.assertEqual(categorical_scores["conversation_outcome"], "rag_no_context")
+        self.assertEqual(
+            build_conversation_outcome(state, final_metadata={"used_rag": 1, "documents_count": 0}),
+            "rag_no_context",
+        )
+        self.assertEqual(
+            build_quality_status(state, final_metadata={"fallback_used": 1}),
+            "fallback",
+        )
+
 
 class QualityEvaluatorTests(unittest.TestCase):
     def test_evaluate_whatsapp_format_detects_common_issues(self) -> None:
@@ -264,6 +344,108 @@ class QualityEvaluatorTests(unittest.TestCase):
         self.assertEqual(result["metadata"]["quality_eval_enabled"], True)
         self.assertEqual(result["metadata"]["llm_judge_enabled"], False)
         self.assertFalse(result["llm_judge_ran"])
+
+
+class SessionMetricsTests(unittest.TestCase):
+    def tearDown(self) -> None:
+        reset_session_metrics("session-demo")
+
+    def test_update_session_metrics_accumulates_safe_aggregates(self) -> None:
+        reset_session_metrics("session-demo")
+
+        update_session_metrics(
+            "session-demo",
+            {
+                "route": "chitchat",
+                "topic": "saludo",
+                "answer": "Hola",
+                "final_answer": "Hola",
+            },
+            scores={
+                "total_latency_ms": 100,
+                "answer_length": 4,
+                "retrieval_docs_count": 0,
+                "used_rag": 0,
+                "used_tool": 0,
+                "fallback_used": 0,
+            },
+            metadata={"channel": "whatsapp", "environment": "prod"},
+        )
+        update_session_metrics(
+            "session-demo",
+            {
+                "route": "benefits",
+                "topic": "beneficios",
+                "tool_name": "benefits_location_api",
+                "answer": "Necesito tu ubicacion.",
+                "final_answer": "Necesito tu ubicacion.",
+            },
+            scores={
+                "total_latency_ms": 200,
+                "answer_length": 22,
+                "retrieval_docs_count": 0,
+                "used_rag": 0,
+                "used_tool": 1,
+                "needs_clarification": 1,
+                "fallback_used": 0,
+            },
+            metadata={"tool_name": "benefits_location_api"},
+        )
+        session_metrics = update_session_metrics(
+            "session-demo",
+            {
+                "route": "loans_rag",
+                "topic": "prestamos",
+                "documents": [{"id": 1}, {"id": 2}],
+                "context": "contexto",
+                "answer": "Te cuento sobre prestamos.",
+                "final_answer": "Te cuento sobre prestamos.",
+            },
+            scores={
+                "total_latency_ms": 300,
+                "answer_length": 26,
+                "retrieval_docs_count": 2,
+                "used_rag": 1,
+                "has_context": 1,
+                "used_tool": 0,
+                "fallback_used": 0,
+            },
+            metadata={"documents_count": 2},
+        )
+
+        numeric_scores = build_session_numeric_scores(session_metrics)
+        categorical_scores = build_session_categorical_scores(session_metrics)
+        debug_payload = build_session_debug_payload(session_metrics)
+
+        self.assertEqual(numeric_scores["session_turn_count"], 3)
+        self.assertEqual(numeric_scores["session_total_latency_ms"], 600)
+        self.assertEqual(numeric_scores["session_avg_latency_ms"], 200.0)
+        self.assertEqual(numeric_scores["session_max_latency_ms"], 300)
+        self.assertEqual(numeric_scores["session_rag_turns_count"], 1)
+        self.assertEqual(numeric_scores["session_tool_turns_count"], 1)
+        self.assertEqual(numeric_scores["session_needs_clarification_count"], 1)
+        self.assertEqual(numeric_scores["session_total_retrieval_docs"], 2)
+        self.assertEqual(numeric_scores["session_distinct_routes_count"], 3)
+        self.assertEqual(numeric_scores["session_distinct_topics_count"], 3)
+
+        self.assertEqual(categorical_scores["session_status"], "mixed")
+        self.assertEqual(categorical_scores["session_primary_route"], "mixed")
+        self.assertEqual(categorical_scores["session_primary_topic"], "mixed")
+        self.assertEqual(categorical_scores["session_has_rag"], "true")
+        self.assertEqual(categorical_scores["session_has_tool"], "true")
+        self.assertEqual(categorical_scores["session_has_fallback"], "false")
+        self.assertEqual(categorical_scores["session_complexity"], "mixed")
+
+        self.assertEqual(debug_payload["turn_count"], 3)
+        self.assertEqual(debug_payload["fallback_count"], 0)
+        self.assertEqual(debug_payload["rag_count"], 1)
+        self.assertEqual(debug_payload["tool_count"], 1)
+        self.assertEqual(debug_payload["status"], "mixed")
+        self.assertEqual(sorted(debug_payload["routes_seen"]), ["benefits", "chitchat", "rag"])
+        self.assertEqual(
+            sorted(debug_payload["topics_seen"]),
+            ["beneficios", "prestamos", "saludo"],
+        )
 
 
 class NodeTracingTests(unittest.TestCase):
@@ -454,6 +636,14 @@ class BotRunnerObservabilityTests(unittest.TestCase):
         self.assertIn("likely_low_value_answer", score_names)
         self.assertIn("needs_human_review", score_names)
         self.assertIn("dataset_candidate", score_names)
+        self.assertIn("conversation_route", score_names)
+        self.assertIn("conversation_topic", score_names)
+        self.assertIn("conversation_outcome", score_names)
+        self.assertIn("conversation_quality_status", score_names)
+        self.assertIn("session_turn_count", score_names)
+        self.assertIn("session_status", score_names)
+        self.assertIn("session_primary_route", score_names)
+        self.assertIn("session_complexity", score_names)
 
 
 if __name__ == "__main__":

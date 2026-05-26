@@ -24,3 +24,9 @@ services:
         sync: false
       - key: LANGFUSE_HOST
         value: https://cloud.langfuse.com
+      - key: LANGFUSE_CATEGORICAL_SCORES_ENABLED
+        value: "true"
+      - key: LANGFUSE_SESSION_METRICS_ENABLED
+        value: "true"
+      - key: LANGFUSE_SESSION_CATEGORICAL_ENABLED
+        value: "true"

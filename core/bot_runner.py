@@ -9,13 +9,31 @@ from ingestion.chunker import chunk_documents
 from ingestion.embeddings import create_embeddings, load_documents
 from memory.local_memory import load_memory
 from observability.evaluators import QUALITY_SCORE_DEFINITIONS, run_quality_evaluation
-from observability.langfuse_config import safe_score, safe_update_observation
+from observability.langfuse_config import (
+    safe_boolean_score,
+    safe_categorical_score,
+    safe_numeric_score,
+    safe_score,
+    safe_update_observation,
+)
 from observability.metrics import (
+    CATEGORICAL_SCORE_DEFINITIONS,
     build_basic_scores,
+    build_categorical_scores,
     build_final_trace_metadata,
     build_initial_trace_metadata,
     duration_ms,
+    is_langfuse_categorical_scores_enabled,
+    is_langfuse_session_categorical_enabled,
+    is_langfuse_session_metrics_enabled,
     now_ms,
+)
+from observability.session_metrics import (
+    SESSION_CATEGORICAL_SCORE_DEFINITIONS,
+    SESSION_NUMERIC_SCORE_DEFINITIONS,
+    build_session_categorical_scores,
+    build_session_numeric_scores,
+    update_session_metrics,
 )
 from observability.tracing import node_observability_context
 from rag.retriever import LocalFaissRetriever
@@ -299,14 +317,44 @@ def _send_trace_scores(
 
     for name, value in scores.items():
         score_definition = score_definitions.get(name, {})
-        if safe_score(
-            span,
-            trace_id,
-            name,
-            value,
-            data_type=score_definition.get("data_type"),
-            comment=score_definition.get("comment"),
-        ):
+        data_type = score_definition.get("data_type")
+        comment = score_definition.get("comment")
+
+        if data_type == "NUMERIC":
+            score_sent = safe_numeric_score(
+                span,
+                trace_id,
+                name,
+                value,
+                comment=comment,
+            )
+        elif data_type == "BOOLEAN":
+            score_sent = safe_boolean_score(
+                span,
+                trace_id,
+                name,
+                value,
+                comment=comment,
+            )
+        elif data_type == "CATEGORICAL":
+            score_sent = safe_categorical_score(
+                span,
+                trace_id,
+                name,
+                value,
+                comment=comment,
+            )
+        else:
+            score_sent = safe_score(
+                span,
+                trace_id,
+                name,
+                value,
+                data_type=data_type,
+                comment=comment,
+            )
+
+        if score_sent:
             scores_sent += 1
 
     return scores_sent
@@ -316,6 +364,114 @@ def _score_result(span: Any, result: dict[str, Any], total_latency_ms: int | Non
     scores = build_basic_scores(result, total_latency_ms=total_latency_ms)
     scores_sent = _send_trace_scores(span, scores, SCORE_DEFINITIONS)
     _log_observability(f"scores sent={scores_sent}")
+
+
+def _run_quality_evaluation_safely(runtime: BotRuntime, result: dict[str, Any]) -> dict[str, Any]:
+    quality_payload = {
+        "scores": {},
+        "metadata": {
+            "quality_eval_enabled": False,
+            "llm_judge_enabled": False,
+            "judge_model": "",
+            "needs_human_review": 0,
+            "dataset_candidate": 0,
+            "quality_eval_error": None,
+            "quality_reason_short": None,
+        },
+        "llm_judge_ran": False,
+        "llm_judge_result": {"skipped": True},
+    }
+
+    try:
+        quality_payload = run_quality_evaluation(
+            result,
+            client=runtime.client,
+        )
+    except Exception as exc:
+        quality_payload["metadata"] = {
+            **quality_payload["metadata"],
+            "quality_eval_error": f"{type(exc).__name__}: {str(exc)}"[:160],
+        }
+
+    return quality_payload
+
+
+def _build_post_run_observability_payload(
+    runtime: BotRuntime,
+    *,
+    result: dict[str, Any],
+    session_id: str,
+    initial_trace_metadata: dict[str, Any],
+    total_latency_ms: int,
+) -> dict[str, Any]:
+    final_trace_metadata = build_final_trace_metadata(
+        result,
+        total_latency_ms=total_latency_ms,
+    )
+    basic_scores = build_basic_scores(result, total_latency_ms=total_latency_ms)
+    quality_payload = _run_quality_evaluation_safely(runtime, result)
+    quality_scores = quality_payload.get("scores", {})
+    merged_metadata = {
+        **initial_trace_metadata,
+        **final_trace_metadata,
+        **quality_payload.get("metadata", {}),
+    }
+    score_context = {
+        **merged_metadata,
+        **basic_scores,
+        **quality_scores,
+    }
+
+    categorical_scores: dict[str, str] = {}
+    if is_langfuse_categorical_scores_enabled():
+        try:
+            categorical_scores = build_categorical_scores(
+                result,
+                initial_metadata=initial_trace_metadata,
+                final_metadata=score_context,
+            )
+        except Exception:
+            _log_observability("categorical scores skipped")
+
+    session_metrics: dict[str, Any] = {}
+    session_numeric_scores: dict[str, Any] = {}
+    session_categorical_scores: dict[str, str] = {}
+    session_tracking_enabled = (
+        is_langfuse_session_metrics_enabled()
+        or is_langfuse_session_categorical_enabled()
+    )
+
+    if session_id and session_tracking_enabled:
+        try:
+            session_metrics = update_session_metrics(
+                session_id,
+                result,
+                scores={
+                    **basic_scores,
+                    **quality_scores,
+                    **categorical_scores,
+                },
+                metadata=merged_metadata,
+            )
+
+            if is_langfuse_session_metrics_enabled():
+                session_numeric_scores = build_session_numeric_scores(session_metrics)
+
+            if is_langfuse_session_categorical_enabled():
+                session_categorical_scores = build_session_categorical_scores(session_metrics)
+        except Exception:
+            _log_observability("session metrics skipped")
+
+    return {
+        "merged_metadata": merged_metadata,
+        "basic_scores": basic_scores,
+        "quality_payload": quality_payload,
+        "quality_scores": quality_scores,
+        "categorical_scores": categorical_scores,
+        "session_metrics": session_metrics,
+        "session_numeric_scores": session_numeric_scores,
+        "session_categorical_scores": session_categorical_scores,
+    }
 
 
 def run_bot_query(
@@ -413,46 +569,22 @@ def run_bot_query(
                     raise
 
                 total_latency_ms = duration_ms(start_ms)
-                final_trace_metadata = build_final_trace_metadata(
-                    result,
+                observability_payload = _build_post_run_observability_payload(
+                    runtime,
+                    result=result,
+                    session_id=session_id,
+                    initial_trace_metadata=initial_trace_metadata,
                     total_latency_ms=total_latency_ms,
                 )
-                quality_payload = {
-                    "scores": {},
-                    "metadata": {
-                        "quality_eval_enabled": False,
-                        "llm_judge_enabled": False,
-                        "judge_model": "",
-                        "needs_human_review": 0,
-                        "dataset_candidate": 0,
-                        "quality_eval_error": None,
-                        "quality_reason_short": None,
-                    },
-                    "llm_judge_ran": False,
-                    "llm_judge_result": {"skipped": True},
-                }
-                try:
-                    quality_payload = run_quality_evaluation(
-                        result,
-                        client=runtime.client,
-                    )
-                except Exception as exc:
-                    quality_payload["metadata"] = {
-                        **quality_payload["metadata"],
-                        "quality_eval_error": f"{type(exc).__name__}: {str(exc)}"[:160],
-                    }
+                quality_payload = observability_payload["quality_payload"]
 
                 safe_update_observation(
                     span,
-                    metadata={
-                        **initial_trace_metadata,
-                        **final_trace_metadata,
-                        **quality_payload.get("metadata", {}),
-                    },
+                    metadata=observability_payload["merged_metadata"],
                     version=app_version,
                 )
                 _score_result(span, result, total_latency_ms=total_latency_ms)
-                quality_scores = quality_payload.get("scores", {})
+                quality_scores = observability_payload["quality_scores"]
                 if quality_scores:
                     quality_scores_sent = _send_trace_scores(
                         span,
@@ -474,6 +606,36 @@ def run_bot_query(
                 else:
                     _log_quality_eval("programmatic scores skipped")
                     _log_quality_eval("llm judge skipped")
+
+                categorical_scores = observability_payload["categorical_scores"]
+                if categorical_scores:
+                    categorical_scores_sent = _send_trace_scores(
+                        span,
+                        categorical_scores,
+                        CATEGORICAL_SCORE_DEFINITIONS,
+                    )
+                    _log_observability(f"categorical_scores_sent={categorical_scores_sent}")
+
+                session_numeric_scores = observability_payload["session_numeric_scores"]
+                if session_numeric_scores:
+                    session_numeric_scores_sent = _send_trace_scores(
+                        span,
+                        session_numeric_scores,
+                        SESSION_NUMERIC_SCORE_DEFINITIONS,
+                    )
+                    _log_observability(f"session_numeric_scores_sent={session_numeric_scores_sent}")
+
+                session_categorical_scores = observability_payload["session_categorical_scores"]
+                if session_categorical_scores:
+                    session_categorical_scores_sent = _send_trace_scores(
+                        span,
+                        session_categorical_scores,
+                        SESSION_CATEGORICAL_SCORE_DEFINITIONS,
+                    )
+                    _log_observability(
+                        f"session_categorical_scores_sent={session_categorical_scores_sent}"
+                    )
+
                 _log_observability(f"total_latency_ms={total_latency_ms}")
 
             try:
@@ -501,6 +663,16 @@ def run_bot_query(
 
         result = runtime.graph.invoke(initial_state, config=fallback_config)
         total_latency_ms = duration_ms(start_ms)
+        try:
+            _build_post_run_observability_payload(
+                runtime,
+                result=result,
+                session_id=session_id,
+                initial_trace_metadata=initial_trace_metadata,
+                total_latency_ms=total_latency_ms,
+            )
+        except Exception:
+            _log_observability("local post-processing skipped")
         _log_observability(f"total_latency_ms={total_latency_ms}")
         return result
     except Exception:
