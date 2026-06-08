@@ -14,6 +14,7 @@ from agents.branch_locator_tool import branch_locator_node
 from agents.credit_card_statement import credit_card_statement_node
 from agents.guardrail import guardrail_node
 from agents.save_memory import save_memory_node
+from observability.tracing import observe_node
 
 
 def build_graph(client, retriever, top_k, score_threshold, chat_model):
@@ -81,18 +82,21 @@ def build_graph(client, retriever, top_k, score_threshold, chat_model):
             llm=llm,
         )
 
-    graph.add_node("contextualizer", contextualizer_wrapper)
-    graph.add_node("router", router_wrapper)
-    graph.add_node("chitchat_answer", chitchat_wrapper)
-    graph.add_node("query_rewriter", query_rewriter_wrapper)
-    graph.add_node("retriever", retriever_wrapper)
-    graph.add_node("answer", answer_wrapper)
-    graph.add_node("bcra_agent", bcra_agent_wrapper)
-    graph.add_node("benefits", benefits_wrapper)
-    graph.add_node("branch_locator", branch_locator_wrapper)
-    graph.add_node("credit_card_statement", credit_card_statement_wrapper)
-    graph.add_node("guardrail", guardrail_node)
-    graph.add_node("save_memory", save_memory_node)
+    graph.add_node("contextualizer", observe_node("contextualizer", contextualizer_wrapper))
+    graph.add_node("router", observe_node("router", router_wrapper))
+    graph.add_node("chitchat_answer", observe_node("chitchat_answer", chitchat_wrapper))
+    graph.add_node("query_rewriter", observe_node("query_rewriter", query_rewriter_wrapper))
+    graph.add_node("retriever", observe_node("retriever", retriever_wrapper))
+    graph.add_node("answer", observe_node("answer", answer_wrapper))
+    graph.add_node("bcra_agent", observe_node("bcra_agent", bcra_agent_wrapper))
+    graph.add_node("benefits", observe_node("benefits", benefits_wrapper))
+    graph.add_node("branch_locator", observe_node("branch_locator", branch_locator_wrapper))
+    graph.add_node(
+        "credit_card_statement",
+        observe_node("credit_card_statement", credit_card_statement_wrapper),
+    )
+    graph.add_node("guardrail", observe_node("guardrail", guardrail_node))
+    graph.add_node("save_memory", observe_node("save_memory", save_memory_node))
 
     graph.set_entry_point("contextualizer")
     graph.add_edge("contextualizer", "router")

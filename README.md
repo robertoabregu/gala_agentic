@@ -31,6 +31,8 @@ LANGFUSE_SECRET_KEY=...
 LANGFUSE_PUBLIC_KEY=...
 LANGFUSE_HOST=https://cloud.langfuse.com
 LANGFUSE_OBSERVABILITY_ENABLED=true
+LANGFUSE_NODE_OBSERVABILITY_ENABLED=true
+LANGFUSE_NODE_SCORE_ENABLED=true
 LANGFUSE_QUALITY_EVAL_ENABLED=true
 LANGFUSE_CATEGORICAL_SCORES_ENABLED=true
 LANGFUSE_SESSION_METRICS_ENABLED=true
@@ -45,6 +47,8 @@ GALA_GRAPH_VERSION=gala_graph_v1
 ```
 
 Si `LANGFUSE_OBSERVABILITY_ENABLED=false`, el bot sigue funcionando pero no intenta enviar la capa avanzada de metadata y scores a Langfuse.
+Si `LANGFUSE_NODE_OBSERVABILITY_ENABLED=false`, el bot mantiene la observabilidad general del trace pero no abre spans por nodo.
+Si `LANGFUSE_NODE_SCORE_ENABLED=false`, los spans por nodo pueden seguir existiendo pero sin scores por nodo.
 Si `LANGFUSE_QUALITY_EVAL_ENABLED=false`, se desactiva la capa de evaluacion de calidad.
 Si `LANGFUSE_CATEGORICAL_SCORES_ENABLED=false`, no se envian scores categóricos como `conversation_route`, `conversation_outcome` o `conversation_quality_status`.
 Si `LANGFUSE_SESSION_METRICS_ENABLED=false`, no se envian scores numéricos agregados por sesion como `session_turn_count` o `session_fallback_count`.

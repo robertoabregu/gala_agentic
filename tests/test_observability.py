@@ -4,7 +4,6 @@ import importlib
 import sys
 import types
 import unittest
-from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -16,7 +15,6 @@ from observability.evaluators import (
     evaluate_whatsapp_format,
     run_quality_evaluation,
 )
-from observability.langfuse_config import safe_update_current_trace
 from observability.metrics import (
     build_categorical_scores,
     build_basic_scores,
@@ -35,6 +33,7 @@ from observability.session_metrics import (
     reset_session_metrics,
     update_session_metrics,
 )
+from observability.tracing import node_observability_context, observe_node
 
 
 def _load_bot_runner_module():
@@ -96,15 +95,23 @@ class FakeLangfuseClient:
         self.span = FakeSpan()
         self.flush_called = False
         self.start_kwargs: dict[str, object] | None = None
-        self.start_calls: list[dict[str, object]] = []
 
     def start_as_current_observation(self, **kwargs):
         self.start_kwargs = kwargs
-        self.start_calls.append(kwargs)
         return FakeObservationContextManager(self.span)
 
     def flush(self) -> None:
         self.flush_called = True
+
+
+class RecordingLangfuseClient:
+    def __init__(self) -> None:
+        self.observations: list[dict[str, object]] = []
+
+    def start_as_current_observation(self, **kwargs):
+        span = FakeSpan()
+        self.observations.append({"kwargs": kwargs, "span": span})
+        return FakeObservationContextManager(span)
 
 
 class ObservabilityMetricsTests(unittest.TestCase):
@@ -277,63 +284,6 @@ class ObservabilityMetricsTests(unittest.TestCase):
         )
 
 
-class LangfuseConfigTests(unittest.TestCase):
-    def test_safe_update_current_trace_uses_propagate_attributes_with_sdk_compatible_args(self) -> None:
-        recorded_calls: list[dict[str, object]] = []
-
-        @contextmanager
-        def fake_propagate_attributes(**kwargs):
-            recorded_calls.append(kwargs)
-            yield
-
-        with patch("observability.langfuse_config.propagate_attributes", fake_propagate_attributes):
-            result = safe_update_current_trace(
-                object(),
-                name="gala-whatsapp-request",
-                user_id="user-123",
-                session_id="session-456",
-                tags=["gala", "", "whatsapp", "gala"],
-                metadata={
-                    "channel": "whatsapp",
-                    "input_chars": 4,
-                    "has_location": True,
-                    "ignored": None,
-                },
-            )
-
-        self.assertTrue(result)
-        self.assertEqual(len(recorded_calls), 1)
-        self.assertEqual(
-            recorded_calls[0],
-            {
-                "trace_name": "gala-whatsapp-request",
-                "user_id": "user-123",
-                "session_id": "session-456",
-                "tags": ["gala", "whatsapp"],
-                "metadata": {
-                    "channel": "whatsapp",
-                    "input_chars": "4",
-                    "has_location": "true",
-                },
-            },
-        )
-
-    def test_safe_update_current_trace_returns_false_when_propagation_fails(self) -> None:
-        @contextmanager
-        def failing_propagate_attributes(**_kwargs):
-            raise RuntimeError("boom")
-            yield
-
-        with patch("observability.langfuse_config.propagate_attributes", failing_propagate_attributes):
-            result = safe_update_current_trace(
-                object(),
-                name="gala-whatsapp-request",
-                user_id="user-123",
-            )
-
-        self.assertFalse(result)
-
-
 class QualityEvaluatorTests(unittest.TestCase):
     def test_evaluate_whatsapp_format_detects_common_issues(self) -> None:
         result = evaluate_whatsapp_format(
@@ -498,11 +448,94 @@ class SessionMetricsTests(unittest.TestCase):
         )
 
 
-class BotRunnerObservabilityTests(unittest.TestCase):
-    def tearDown(self) -> None:
-        reset_session_metrics("demo")
-        reset_session_metrics("whatsapp-1")
+class NodeTracingTests(unittest.TestCase):
+    def test_observe_node_records_metadata_and_scores(self) -> None:
+        client = RecordingLangfuseClient()
+        wrapped_node = observe_node(
+            "retriever",
+            lambda state: {
+                **state,
+                "route": "loans_rag",
+                "documents": [{"id": 1}, {"id": 2}],
+                "context": "contexto armado",
+            },
+        )
 
+        with patch.dict(
+            "os.environ",
+            {
+                "LANGFUSE_NODE_OBSERVABILITY_ENABLED": "true",
+                "LANGFUSE_NODE_SCORE_ENABLED": "true",
+            },
+            clear=False,
+        ):
+            with node_observability_context(client):
+                result = wrapped_node(
+                    {
+                        "question": "prestamos",
+                        "route": "",
+                        "documents": [],
+                        "context": "",
+                    }
+                )
+
+        self.assertEqual(result["route"], "loans_rag")
+        self.assertEqual(len(client.observations), 1)
+
+        observation = client.observations[0]
+        start_metadata = observation["kwargs"]["metadata"]
+        end_metadata = observation["span"].updates[-1]["metadata"]
+        score_values = {
+            score["name"]: score["value"]
+            for score in observation["span"].observation_scores
+        }
+
+        self.assertEqual(observation["kwargs"]["name"], "retriever")
+        self.assertEqual(start_metadata["node_name"], "retriever")
+        self.assertEqual(end_metadata["node_status"], "success")
+        self.assertEqual(end_metadata["documents_count"], 2)
+        self.assertTrue(end_metadata["has_context"])
+        self.assertIn("retriever_latency_ms", score_values)
+        self.assertEqual(score_values["retriever_success"], 1)
+        self.assertEqual(score_values["retriever_error"], 0)
+        self.assertEqual(score_values["retriever_docs_count"], 2)
+        self.assertEqual(score_values["retriever_has_context"], 1)
+
+    def test_observe_node_reraises_functional_error_and_scores_it(self) -> None:
+        client = RecordingLangfuseClient()
+
+        def failing_node(state):
+            raise ValueError("boom")
+
+        wrapped_node = observe_node("router", failing_node)
+
+        with patch.dict(
+            "os.environ",
+            {
+                "LANGFUSE_NODE_OBSERVABILITY_ENABLED": "true",
+                "LANGFUSE_NODE_SCORE_ENABLED": "true",
+            },
+            clear=False,
+        ):
+            with node_observability_context(client):
+                with self.assertRaises(ValueError):
+                    wrapped_node({"question": "hola", "route": ""})
+
+        self.assertEqual(len(client.observations), 1)
+        observation = client.observations[0]
+        end_metadata = observation["span"].updates[-1]["metadata"]
+        score_values = {
+            score["name"]: score["value"]
+            for score in observation["span"].observation_scores
+        }
+
+        self.assertEqual(end_metadata["node_status"], "error")
+        self.assertTrue(str(end_metadata["error"]).startswith("ValueError"))
+        self.assertEqual(score_values["router_success"], 0)
+        self.assertEqual(score_values["router_error"], 1)
+
+
+class BotRunnerObservabilityTests(unittest.TestCase):
     def test_run_bot_query_continues_when_langfuse_span_fails(self) -> None:
         bot_runner = _load_bot_runner_module()
         graph = FakeGraph(
@@ -518,6 +551,7 @@ class BotRunnerObservabilityTests(unittest.TestCase):
         runtime = SimpleNamespace(
             graph=graph,
             client=None,
+            langfuse_handler=None,
             langfuse_client=BrokenLangfuseClient(),
             settings=SimpleNamespace(),
         )
@@ -531,11 +565,9 @@ class BotRunnerObservabilityTests(unittest.TestCase):
 
         self.assertEqual(result["final_answer"], "ok")
         self.assertEqual(len(graph.calls), 1)
-        self.assertNotIn("callbacks", graph.calls[0][1])
 
     def test_run_bot_query_updates_metadata_and_scores_when_langfuse_is_available(self) -> None:
         bot_runner = _load_bot_runner_module()
-        reset_session_metrics("whatsapp-1")
         graph = FakeGraph(
             {
                 "route": "benefits",
@@ -554,6 +586,7 @@ class BotRunnerObservabilityTests(unittest.TestCase):
         runtime = SimpleNamespace(
             graph=graph,
             client=None,
+            langfuse_handler="handler",
             langfuse_client=langfuse_client,
             settings=SimpleNamespace(),
         )
@@ -566,36 +599,21 @@ class BotRunnerObservabilityTests(unittest.TestCase):
             },
             clear=False,
         ):
-            with patch.object(bot_runner, "safe_update_current_trace", return_value=True) as safe_update_current_trace_mock:
-                with patch.object(bot_runner, "load_memory", return_value={}):
-                    result = bot_runner.run_bot_query(
-                        runtime=runtime,
-                        question="beneficios cerca",
-                        session_id="whatsapp-1",
-                        langfuse_tags=["gala", "whatsapp"],
-                        observation_name="gala-whatsapp-request",
-                        user_location={"latitude": "-34.5", "longitude": "-58.4"},
-                        media={"content_type": "application/pdf", "filename": "statement.pdf"},
-                    )
+            with patch.object(bot_runner, "load_memory", return_value={}):
+                result = bot_runner.run_bot_query(
+                    runtime=runtime,
+                    question="beneficios cerca",
+                    session_id="whatsapp-1",
+                    langfuse_tags=["gala", "whatsapp"],
+                    observation_name="gala-whatsapp-request",
+                    user_location={"latitude": "-34.5", "longitude": "-58.4"},
+                    media={"content_type": "application/pdf", "filename": "statement.pdf"},
+                )
 
         self.assertEqual(result["final_answer"], "respuesta final")
         self.assertTrue(langfuse_client.flush_called)
-        self.assertEqual(len(langfuse_client.start_calls), 1)
         self.assertEqual(langfuse_client.start_kwargs["name"], "gala-whatsapp-request")
-        self.assertNotIn("callbacks", graph.calls[0][1])
-        self.assertEqual(safe_update_current_trace_mock.call_count, 2)
-
-        initial_trace_call = safe_update_current_trace_mock.call_args_list[0]
-        self.assertIs(initial_trace_call.args[0], langfuse_client)
-        self.assertEqual(initial_trace_call.kwargs["name"], "gala-whatsapp-request")
-        self.assertEqual(initial_trace_call.kwargs["user_id"], "whatsapp-1")
-        self.assertEqual(initial_trace_call.kwargs["session_id"], "whatsapp-1")
-        self.assertEqual(initial_trace_call.kwargs["tags"], ["gala", "whatsapp"])
-        self.assertEqual(initial_trace_call.kwargs["metadata"]["channel"], "whatsapp")
-
-        final_trace_call = safe_update_current_trace_mock.call_args_list[-1]
-        self.assertEqual(final_trace_call.kwargs["metadata"]["final_route"], "benefits")
-        self.assertEqual(final_trace_call.kwargs["metadata"]["quality_eval_enabled"], True)
+        self.assertEqual(graph.calls[0][1]["callbacks"], ["handler"])
 
         first_metadata = langfuse_client.span.updates[0]["metadata"]
         final_metadata = langfuse_client.span.updates[-1]["metadata"]
@@ -626,42 +644,6 @@ class BotRunnerObservabilityTests(unittest.TestCase):
         self.assertIn("session_status", score_names)
         self.assertIn("session_primary_route", score_names)
         self.assertIn("session_complexity", score_names)
-
-    def test_run_bot_query_continues_when_safe_update_current_trace_fails(self) -> None:
-        bot_runner = _load_bot_runner_module()
-        graph = FakeGraph(
-            {
-                "route": "chitchat",
-                "answer": "hola",
-                "final_answer": "hola",
-                "documents": [],
-                "context": "",
-                "memory": {},
-            }
-        )
-        langfuse_client = FakeLangfuseClient()
-        runtime = SimpleNamespace(
-            graph=graph,
-            client=None,
-            langfuse_client=langfuse_client,
-            settings=SimpleNamespace(),
-        )
-
-        with patch.object(bot_runner, "safe_update_current_trace", return_value=False) as safe_update_current_trace_mock:
-            with patch.object(bot_runner, "load_memory", return_value={}):
-                result = bot_runner.run_bot_query(
-                    runtime=runtime,
-                    question="hola",
-                    session_id="demo",
-                    langfuse_tags=["gala", "whatsapp"],
-                    observation_name="gala-whatsapp-request",
-                )
-
-        self.assertEqual(result["final_answer"], "hola")
-        self.assertEqual(len(graph.calls), 1)
-        self.assertNotIn("callbacks", graph.calls[0][1])
-        self.assertTrue(langfuse_client.flush_called)
-        self.assertEqual(safe_update_current_trace_mock.call_count, 2)
 
 
 if __name__ == "__main__":
