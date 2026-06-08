@@ -15,6 +15,7 @@ from observability.langfuse_config import (
     safe_categorical_score,
     safe_numeric_score,
     safe_score,
+    safe_update_current_trace,
     safe_update_observation,
 )
 from observability.metrics import (
@@ -473,6 +474,7 @@ def run_bot_query(
 
     start_ms = now_ms()
     resolved_langfuse_tags = langfuse_tags or ["gala", "langgraph", "rag", "local-prototype"]
+    resolved_langfuse_user_id = langfuse_user_id or session_id
     initial_state = build_initial_state(
         question=question,
         session_id=session_id,
@@ -491,7 +493,7 @@ def run_bot_query(
     config: dict[str, Any] = {
         "metadata": {
             "langfuse_session_id": session_id,
-            "langfuse_user_id": langfuse_user_id or session_id,
+            "langfuse_user_id": resolved_langfuse_user_id,
             "langfuse_tags": resolved_langfuse_tags,
         }
     }
@@ -505,6 +507,14 @@ def run_bot_query(
                 as_type="span",
                 name=observation_name,
             ) as span:
+                safe_update_current_trace(
+                    runtime.langfuse_client,
+                    name=observation_name,
+                    user_id=resolved_langfuse_user_id,
+                    session_id=session_id,
+                    tags=resolved_langfuse_tags,
+                    metadata=initial_trace_metadata,
+                )
                 safe_update_observation(
                     span,
                     metadata=initial_trace_metadata,
@@ -521,9 +531,18 @@ def run_bot_query(
                         total_latency_ms=total_latency_ms,
                         error=exc,
                     )
+                    error_trace_metadata = {**initial_trace_metadata, **final_trace_metadata}
+                    safe_update_current_trace(
+                        runtime.langfuse_client,
+                        name=observation_name,
+                        user_id=resolved_langfuse_user_id,
+                        session_id=session_id,
+                        tags=resolved_langfuse_tags,
+                        metadata=error_trace_metadata,
+                    )
                     safe_update_observation(
                         span,
-                        metadata={**initial_trace_metadata, **final_trace_metadata},
+                        metadata=error_trace_metadata,
                         level="ERROR",
                         status_message=type(exc).__name__,
                         version=app_version,
@@ -557,6 +576,14 @@ def run_bot_query(
                 )
                 quality_payload = observability_payload["quality_payload"]
 
+                safe_update_current_trace(
+                    runtime.langfuse_client,
+                    name=observation_name,
+                    user_id=resolved_langfuse_user_id,
+                    session_id=session_id,
+                    tags=resolved_langfuse_tags,
+                    metadata=observability_payload["merged_metadata"],
+                )
                 safe_update_observation(
                     span,
                     metadata=observability_payload["merged_metadata"],
