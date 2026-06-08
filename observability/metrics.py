@@ -146,28 +146,6 @@ def is_langfuse_observability_enabled() -> bool:
     return raw_value.strip().lower() not in FALSE_ENV_VALUES
 
 
-def is_langfuse_node_observability_enabled() -> bool:
-    if not is_langfuse_observability_enabled():
-        return False
-
-    raw_value = os.getenv("LANGFUSE_NODE_OBSERVABILITY_ENABLED")
-    if raw_value is None:
-        return True
-
-    return raw_value.strip().lower() not in FALSE_ENV_VALUES
-
-
-def is_langfuse_node_score_enabled() -> bool:
-    if not is_langfuse_node_observability_enabled():
-        return False
-
-    raw_value = os.getenv("LANGFUSE_NODE_SCORE_ENABLED")
-    if raw_value is None:
-        return True
-
-    return raw_value.strip().lower() not in FALSE_ENV_VALUES
-
-
 def is_langfuse_categorical_scores_enabled() -> bool:
     if not is_langfuse_observability_enabled():
         return False
