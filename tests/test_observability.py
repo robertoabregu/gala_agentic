@@ -4,7 +4,6 @@ import importlib
 import sys
 import types
 import unittest
-from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -16,7 +15,6 @@ from observability.evaluators import (
     evaluate_whatsapp_format,
     run_quality_evaluation,
 )
-from observability.langfuse_config import safe_update_current_trace
 from observability.metrics import (
     build_categorical_scores,
     build_basic_scores,
@@ -277,63 +275,6 @@ class ObservabilityMetricsTests(unittest.TestCase):
         )
 
 
-class LangfuseConfigTests(unittest.TestCase):
-    def test_safe_update_current_trace_uses_propagate_attributes_with_sdk_compatible_args(self) -> None:
-        recorded_calls: list[dict[str, object]] = []
-
-        @contextmanager
-        def fake_propagate_attributes(**kwargs):
-            recorded_calls.append(kwargs)
-            yield
-
-        with patch("observability.langfuse_config.propagate_attributes", fake_propagate_attributes):
-            result = safe_update_current_trace(
-                object(),
-                name="gala-whatsapp-request",
-                user_id="user-123",
-                session_id="session-456",
-                tags=["gala", "", "whatsapp", "gala"],
-                metadata={
-                    "channel": "whatsapp",
-                    "input_chars": 4,
-                    "has_location": True,
-                    "ignored": None,
-                },
-            )
-
-        self.assertTrue(result)
-        self.assertEqual(len(recorded_calls), 1)
-        self.assertEqual(
-            recorded_calls[0],
-            {
-                "trace_name": "gala-whatsapp-request",
-                "user_id": "user-123",
-                "session_id": "session-456",
-                "tags": ["gala", "whatsapp"],
-                "metadata": {
-                    "channel": "whatsapp",
-                    "input_chars": "4",
-                    "has_location": "true",
-                },
-            },
-        )
-
-    def test_safe_update_current_trace_returns_false_when_propagation_fails(self) -> None:
-        @contextmanager
-        def failing_propagate_attributes(**_kwargs):
-            raise RuntimeError("boom")
-            yield
-
-        with patch("observability.langfuse_config.propagate_attributes", failing_propagate_attributes):
-            result = safe_update_current_trace(
-                object(),
-                name="gala-whatsapp-request",
-                user_id="user-123",
-            )
-
-        self.assertFalse(result)
-
-
 class QualityEvaluatorTests(unittest.TestCase):
     def test_evaluate_whatsapp_format_detects_common_issues(self) -> None:
         result = evaluate_whatsapp_format(
@@ -566,36 +507,22 @@ class BotRunnerObservabilityTests(unittest.TestCase):
             },
             clear=False,
         ):
-            with patch.object(bot_runner, "safe_update_current_trace", return_value=True) as safe_update_current_trace_mock:
-                with patch.object(bot_runner, "load_memory", return_value={}):
-                    result = bot_runner.run_bot_query(
-                        runtime=runtime,
-                        question="beneficios cerca",
-                        session_id="whatsapp-1",
-                        langfuse_tags=["gala", "whatsapp"],
-                        observation_name="gala-whatsapp-request",
-                        user_location={"latitude": "-34.5", "longitude": "-58.4"},
-                        media={"content_type": "application/pdf", "filename": "statement.pdf"},
-                    )
+            with patch.object(bot_runner, "load_memory", return_value={}):
+                result = bot_runner.run_bot_query(
+                    runtime=runtime,
+                    question="beneficios cerca",
+                    session_id="whatsapp-1",
+                    langfuse_tags=["gala", "whatsapp"],
+                    observation_name="gala-whatsapp-request",
+                    user_location={"latitude": "-34.5", "longitude": "-58.4"},
+                    media={"content_type": "application/pdf", "filename": "statement.pdf"},
+                )
 
         self.assertEqual(result["final_answer"], "respuesta final")
         self.assertTrue(langfuse_client.flush_called)
         self.assertEqual(len(langfuse_client.start_calls), 1)
         self.assertEqual(langfuse_client.start_kwargs["name"], "gala-whatsapp-request")
         self.assertNotIn("callbacks", graph.calls[0][1])
-        self.assertEqual(safe_update_current_trace_mock.call_count, 2)
-
-        initial_trace_call = safe_update_current_trace_mock.call_args_list[0]
-        self.assertIs(initial_trace_call.args[0], langfuse_client)
-        self.assertEqual(initial_trace_call.kwargs["name"], "gala-whatsapp-request")
-        self.assertEqual(initial_trace_call.kwargs["user_id"], "whatsapp-1")
-        self.assertEqual(initial_trace_call.kwargs["session_id"], "whatsapp-1")
-        self.assertEqual(initial_trace_call.kwargs["tags"], ["gala", "whatsapp"])
-        self.assertEqual(initial_trace_call.kwargs["metadata"]["channel"], "whatsapp")
-
-        final_trace_call = safe_update_current_trace_mock.call_args_list[-1]
-        self.assertEqual(final_trace_call.kwargs["metadata"]["final_route"], "benefits")
-        self.assertEqual(final_trace_call.kwargs["metadata"]["quality_eval_enabled"], True)
 
         first_metadata = langfuse_client.span.updates[0]["metadata"]
         final_metadata = langfuse_client.span.updates[-1]["metadata"]
@@ -626,42 +553,6 @@ class BotRunnerObservabilityTests(unittest.TestCase):
         self.assertIn("session_status", score_names)
         self.assertIn("session_primary_route", score_names)
         self.assertIn("session_complexity", score_names)
-
-    def test_run_bot_query_continues_when_safe_update_current_trace_fails(self) -> None:
-        bot_runner = _load_bot_runner_module()
-        graph = FakeGraph(
-            {
-                "route": "chitchat",
-                "answer": "hola",
-                "final_answer": "hola",
-                "documents": [],
-                "context": "",
-                "memory": {},
-            }
-        )
-        langfuse_client = FakeLangfuseClient()
-        runtime = SimpleNamespace(
-            graph=graph,
-            client=None,
-            langfuse_client=langfuse_client,
-            settings=SimpleNamespace(),
-        )
-
-        with patch.object(bot_runner, "safe_update_current_trace", return_value=False) as safe_update_current_trace_mock:
-            with patch.object(bot_runner, "load_memory", return_value={}):
-                result = bot_runner.run_bot_query(
-                    runtime=runtime,
-                    question="hola",
-                    session_id="demo",
-                    langfuse_tags=["gala", "whatsapp"],
-                    observation_name="gala-whatsapp-request",
-                )
-
-        self.assertEqual(result["final_answer"], "hola")
-        self.assertEqual(len(graph.calls), 1)
-        self.assertNotIn("callbacks", graph.calls[0][1])
-        self.assertTrue(langfuse_client.flush_called)
-        self.assertEqual(safe_update_current_trace_mock.call_count, 2)
 
 
 if __name__ == "__main__":

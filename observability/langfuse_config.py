@@ -1,11 +1,9 @@
 import os
 from typing import Any
 
-from langfuse import Langfuse, get_client as get_langfuse_sdk_client, propagate_attributes
+from langfuse import Langfuse, get_client as get_langfuse_sdk_client
 
 from observability.metrics import is_langfuse_observability_enabled
-
-_MAX_PROPAGATED_ATTRIBUTE_LENGTH = 200
 
 
 def get_langfuse_client():
@@ -39,71 +37,6 @@ def get_langfuse_client():
     except Exception:
         print("[observability] Langfuse initialization failed")
         return None
-
-
-def safe_update_current_trace(
-    langfuse_client: Any,
-    *,
-    name: str | None = None,
-    user_id: str | None = None,
-    session_id: str | None = None,
-    tags: list[str] | tuple[str, ...] | None = None,
-    metadata: dict[str, Any] | None = None,
-) -> bool:
-    if langfuse_client is None:
-        return False
-
-    normalized_name = _normalize_trace_string(name)
-    normalized_user_id = _normalize_trace_string(user_id)
-    normalized_session_id = _normalize_trace_string(session_id)
-    normalized_tags = _normalize_trace_tags(tags)
-    normalized_trace_metadata = _normalize_trace_metadata(metadata)
-
-    direct_update_kwargs: dict[str, Any] = {}
-    if normalized_name:
-        direct_update_kwargs["name"] = normalized_name
-    if normalized_user_id:
-        direct_update_kwargs["user_id"] = normalized_user_id
-    if normalized_session_id:
-        direct_update_kwargs["session_id"] = normalized_session_id
-    if normalized_tags:
-        direct_update_kwargs["tags"] = normalized_tags
-    if metadata:
-        direct_update_kwargs["metadata"] = metadata
-
-    if direct_update_kwargs:
-        for method_name in ("update_current_trace", "update_trace"):
-            update_trace = getattr(langfuse_client, method_name, None)
-            if not callable(update_trace):
-                continue
-
-            try:
-                update_trace(**direct_update_kwargs)
-                return True
-            except Exception:
-                return False
-
-    propagation_kwargs: dict[str, Any] = {}
-    if normalized_name:
-        propagation_kwargs["trace_name"] = normalized_name
-    if normalized_user_id:
-        propagation_kwargs["user_id"] = normalized_user_id
-    if normalized_session_id:
-        propagation_kwargs["session_id"] = normalized_session_id
-    if normalized_tags:
-        propagation_kwargs["tags"] = normalized_tags
-    if normalized_trace_metadata:
-        propagation_kwargs["metadata"] = normalized_trace_metadata
-
-    if not propagation_kwargs:
-        return False
-
-    try:
-        with propagate_attributes(**propagation_kwargs):
-            pass
-        return True
-    except Exception:
-        return False
 
 
 def safe_update_observation(
@@ -267,60 +200,6 @@ def safe_categorical_score(
         metadata=metadata,
         scope=scope,
     )
-
-
-def _normalize_trace_string(value: Any) -> str | None:
-    if value is None:
-        return None
-
-    normalized_value = str(value).strip()
-    if not normalized_value:
-        return None
-
-    return normalized_value[:_MAX_PROPAGATED_ATTRIBUTE_LENGTH]
-
-
-def _normalize_trace_tags(tags: list[str] | tuple[str, ...] | None) -> list[str] | None:
-    if not isinstance(tags, (list, tuple)):
-        return None
-
-    normalized_tags: list[str] = []
-    for tag in tags:
-        normalized_tag = _normalize_trace_string(tag)
-        if not normalized_tag or normalized_tag in normalized_tags:
-            continue
-        normalized_tags.append(normalized_tag)
-
-    return normalized_tags or None
-
-
-def _normalize_trace_metadata(metadata: dict[str, Any] | None) -> dict[str, str] | None:
-    if not isinstance(metadata, dict):
-        return None
-
-    normalized_metadata: dict[str, str] = {}
-    for raw_key, raw_value in metadata.items():
-        normalized_key = _normalize_trace_string(raw_key)
-        normalized_value = _normalize_trace_metadata_value(raw_value)
-        if not normalized_key or normalized_value is None:
-            continue
-        normalized_metadata[normalized_key] = normalized_value
-
-    return normalized_metadata or None
-
-
-def _normalize_trace_metadata_value(value: Any) -> str | None:
-    if value is None:
-        return None
-
-    if isinstance(value, bool):
-        return "true" if value else "false"
-
-    normalized_value = str(value).strip()
-    if not normalized_value:
-        return None
-
-    return normalized_value[:_MAX_PROPAGATED_ATTRIBUTE_LENGTH]
 
 
 def _normalize_bool_score_value(value: Any) -> int | None:
