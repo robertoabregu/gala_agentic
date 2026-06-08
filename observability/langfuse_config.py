@@ -1,12 +1,12 @@
 import os
 from typing import Any
 
-from langfuse import Langfuse, get_client as get_langfuse_sdk_client
+from langfuse import Langfuse, get_client
 
 from observability.metrics import is_langfuse_observability_enabled
 
 
-def get_langfuse_client():
+def get_langfuse_handler():
     if not is_langfuse_observability_enabled():
         print("[observability] Langfuse observability disabled")
         return None
@@ -20,20 +20,22 @@ def get_langfuse_client():
         return None
 
     try:
+        from langfuse.langchain import CallbackHandler
+
         Langfuse(
             public_key=public_key,
             secret_key=secret_key,
             host=host,
         )
 
-        langfuse = get_langfuse_sdk_client()
+        langfuse = get_client()
 
         if not langfuse.auth_check():
             print("[observability] Langfuse auth_check failed")
             return None
 
         print("[observability] Langfuse connected")
-        return langfuse
+        return CallbackHandler()
     except Exception:
         print("[observability] Langfuse initialization failed")
         return None

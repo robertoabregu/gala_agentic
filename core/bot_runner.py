@@ -10,7 +10,6 @@ from ingestion.embeddings import create_embeddings, load_documents
 from memory.local_memory import load_memory
 from observability.evaluators import QUALITY_SCORE_DEFINITIONS, run_quality_evaluation
 from observability.langfuse_config import (
-    get_langfuse_client,
     safe_boolean_score,
     safe_categorical_score,
     safe_numeric_score,
@@ -36,6 +35,7 @@ from observability.session_metrics import (
     build_session_numeric_scores,
     update_session_metrics,
 )
+from observability.tracing import node_observability_context
 from rag.retriever import LocalFaissRetriever
 
 
@@ -105,6 +105,7 @@ class BotRuntime:
     client: OpenAI
     retriever: LocalFaissRetriever
     graph: Any | None
+    langfuse_handler: Any | None
     langfuse_client: Any | None
     settings: RuntimeSettings
     top_k: int
@@ -114,6 +115,18 @@ def build_graph(*args, **kwargs):
     from graph.gala_graph import build_graph as _build_graph
 
     return _build_graph(*args, **kwargs)
+
+
+def get_langfuse_handler():
+    from observability.langfuse_config import get_langfuse_handler as _get_langfuse_handler
+
+    return _get_langfuse_handler()
+
+
+def get_langfuse_client():
+    from langfuse import get_client
+
+    return get_client()
 
 
 def load_runtime_settings() -> RuntimeSettings:
@@ -228,14 +241,18 @@ def prepare_runtime(
             chat_model=settings.chat_model,
         )
 
+    langfuse_handler = None
     langfuse_client = None
     if include_langfuse:
-        langfuse_client = get_langfuse_client()
+        langfuse_handler = get_langfuse_handler()
+        if langfuse_handler:
+            langfuse_client = get_langfuse_client()
 
     return BotRuntime(
         client=client,
         retriever=retriever,
         graph=graph,
+        langfuse_handler=langfuse_handler,
         langfuse_client=langfuse_client,
         settings=settings,
         top_k=top_k,
@@ -496,6 +513,9 @@ def run_bot_query(
         }
     }
 
+    if runtime.langfuse_handler:
+        config["callbacks"] = [runtime.langfuse_handler]
+
     if runtime.langfuse_client:
         result: dict[str, Any] | None = None
         graph_error: Exception | None = None
@@ -512,7 +532,8 @@ def run_bot_query(
                 )
 
                 try:
-                    result = runtime.graph.invoke(initial_state, config=config)
+                    with node_observability_context(runtime.langfuse_client):
+                        result = runtime.graph.invoke(initial_state, config=config)
                 except Exception as exc:
                     graph_error = exc
                     total_latency_ms = duration_ms(start_ms)
@@ -635,7 +656,12 @@ def run_bot_query(
             _log_observability("Langfuse span unavailable, continuing without advanced observability")
 
     try:
-        result = runtime.graph.invoke(initial_state, config=config)
+        fallback_config = config
+        if runtime.langfuse_client:
+            fallback_config = dict(config)
+            fallback_config.pop("callbacks", None)
+
+        result = runtime.graph.invoke(initial_state, config=fallback_config)
         total_latency_ms = duration_ms(start_ms)
         try:
             _build_post_run_observability_payload(
