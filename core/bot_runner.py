@@ -307,6 +307,17 @@ def _log_quality_eval(message: str) -> None:
     print(f"[quality-eval] {message}")
 
 
+def _update_trace_context(
+    trace_context: dict[str, Any] | None,
+    **values: Any,
+) -> None:
+    if trace_context is None:
+        return
+
+    for key, value in values.items():
+        trace_context[key] = value
+
+
 def _send_trace_scores(
     span: Any,
     scores: dict[str, Any],
@@ -484,6 +495,10 @@ def run_bot_query(
     observation_name: str = "gala-rag-request",
     user_location: dict[str, Any] | None = None,
     media: dict[str, Any] | None = None,
+    trace_context: dict[str, Any] | None = None,
+    trace_channel: str | None = None,
+    trace_entrypoint: str | None = None,
+    trace_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if runtime.graph is None:
         raise RuntimeError("El runtime no fue preparado con un grafo ejecutable.")
@@ -500,15 +515,32 @@ def run_bot_query(
         question=question,
         user_location=initial_state.get("user_location"),
         media=media,
+        channel=trace_channel,
+        entrypoint=trace_entrypoint,
         langfuse_tags=resolved_langfuse_tags,
         observation_name=observation_name,
     )
+    if isinstance(trace_metadata, dict) and trace_metadata:
+        initial_trace_metadata = {
+            **initial_trace_metadata,
+            **trace_metadata,
+        }
     app_version = str(initial_trace_metadata.get("app_version") or "").strip() or None
+    resolved_langfuse_user_id = langfuse_user_id or session_id
+
+    _update_trace_context(
+        trace_context,
+        session_id=session_id,
+        langfuse_user_id=resolved_langfuse_user_id,
+        langfuse_tags=list(resolved_langfuse_tags),
+        observation_name=observation_name,
+        initial_trace_metadata=dict(initial_trace_metadata),
+    )
 
     config: dict[str, Any] = {
         "metadata": {
             "langfuse_session_id": session_id,
-            "langfuse_user_id": langfuse_user_id or session_id,
+            "langfuse_user_id": resolved_langfuse_user_id,
             "langfuse_tags": resolved_langfuse_tags,
         }
     }
@@ -525,6 +557,10 @@ def run_bot_query(
                 as_type="span",
                 name=observation_name,
             ) as span:
+                _update_trace_context(
+                    trace_context,
+                    trace_id=getattr(span, "trace_id", None),
+                )
                 safe_update_observation(
                     span,
                     metadata=initial_trace_metadata,
@@ -566,6 +602,12 @@ def run_bot_query(
                         comment=SCORE_DEFINITIONS["total_latency_ms"]["comment"],
                     )
                     _log_observability(f"total_latency_ms={total_latency_ms}")
+                    _update_trace_context(
+                        trace_context,
+                        total_latency_ms=total_latency_ms,
+                        final_trace_metadata=dict(final_trace_metadata),
+                        error=f"{type(exc).__name__}: {str(exc)}",
+                    )
                     raise
 
                 total_latency_ms = duration_ms(start_ms)
@@ -637,6 +679,17 @@ def run_bot_query(
                     )
 
                 _log_observability(f"total_latency_ms={total_latency_ms}")
+                _update_trace_context(
+                    trace_context,
+                    total_latency_ms=total_latency_ms,
+                    final_trace_metadata=dict(observability_payload["merged_metadata"]),
+                    quality_payload=dict(quality_payload),
+                    categorical_scores=dict(observability_payload["categorical_scores"]),
+                    session_numeric_scores=dict(observability_payload["session_numeric_scores"]),
+                    session_categorical_scores=dict(
+                        observability_payload["session_categorical_scores"]
+                    ),
+                )
 
             try:
                 runtime.langfuse_client.flush()
@@ -664,18 +717,38 @@ def run_bot_query(
         result = runtime.graph.invoke(initial_state, config=fallback_config)
         total_latency_ms = duration_ms(start_ms)
         try:
-            _build_post_run_observability_payload(
+            observability_payload = _build_post_run_observability_payload(
                 runtime,
                 result=result,
                 session_id=session_id,
                 initial_trace_metadata=initial_trace_metadata,
                 total_latency_ms=total_latency_ms,
             )
+            _update_trace_context(
+                trace_context,
+                total_latency_ms=total_latency_ms,
+                final_trace_metadata=dict(observability_payload["merged_metadata"]),
+                quality_payload=dict(observability_payload["quality_payload"]),
+                categorical_scores=dict(observability_payload["categorical_scores"]),
+                session_numeric_scores=dict(observability_payload["session_numeric_scores"]),
+                session_categorical_scores=dict(
+                    observability_payload["session_categorical_scores"]
+                ),
+            )
         except Exception:
             _log_observability("local post-processing skipped")
+            _update_trace_context(
+                trace_context,
+                total_latency_ms=total_latency_ms,
+            )
         _log_observability(f"total_latency_ms={total_latency_ms}")
         return result
-    except Exception:
+    except Exception as exc:
         total_latency_ms = duration_ms(start_ms)
         _log_observability(f"total_latency_ms={total_latency_ms}")
+        _update_trace_context(
+            trace_context,
+            total_latency_ms=total_latency_ms,
+            error=f"{type(exc).__name__}: {str(exc)}",
+        )
         raise
