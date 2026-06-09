@@ -8,6 +8,7 @@ Bot multiagente con LangGraph + RAG para responder consultas de ayuda de Banco G
 - `GET /health` healthcheck para Render.
 - `POST /webhook` webhook productivo recomendado para Twilio WhatsApp.
 - `POST /whatsapp` alias del webhook.
+- `POST /evaluate` endpoint JSON para correr datasets y experiments de Langfuse sin Twilio.
 
 ## Variables de entorno
 
@@ -44,6 +45,14 @@ LLM_JUDGE_MAX_CONTEXT_CHARS=2000
 APP_ENV=dev
 APP_VERSION=unknown
 GALA_GRAPH_VERSION=gala_graph_v1
+EVALUATION_ENDPOINT_ENABLED=true
+EVALUATION_ENDPOINT_TOKEN=
+EVALUATION_BACKEND_URL=http://localhost:5000
+LANGFUSE_DATASET_NAME=
+LANGFUSE_EXPERIMENT_NAME=
+LANGFUSE_EXPERIMENT_DESCRIPTION=
+EVALUATION_REQUEST_TIMEOUT_SECONDS=45
+LANGFUSE_EXPERIMENT_MAX_CONCURRENCY=4
 ```
 
 Si `LANGFUSE_OBSERVABILITY_ENABLED=false`, el bot sigue funcionando pero no intenta enviar la capa avanzada de metadata y scores a Langfuse.
@@ -55,6 +64,11 @@ Si `LANGFUSE_SESSION_METRICS_ENABLED=false`, no se envian scores numéricos agre
 Si `LANGFUSE_SESSION_CATEGORICAL_ENABLED=false`, no se envian scores categóricos de sesion como `session_status`, `session_primary_route` o `session_complexity`.
 Si `LLM_JUDGE_ENABLED=false`, solo corren los evaluadores programaticos y no hay costo adicional de judge por LLM.
 
+## Experiments
+
+- `POST /evaluate` ejecuta el mismo grafo del bot sin pasar por Twilio, no devuelve TwiML y usa sesiones `eval-*`.
+- `python experiments/run_langfuse_dataset.py --dataset "Gala Regression Cases" --experiment "local-regression-baseline-v1" --backend-url "http://localhost:5000"` corre un dataset completo contra el backend y registra el dataset run en Langfuse.
+- La guia completa para proteger el endpoint, estructurar datasets y leer scores estÃ¡ en `docs/experiments.md`.
 Variables opcionales para WhatsApp:
 
 ```bash

@@ -13,6 +13,17 @@ from twilio.twiml.messaging_response import MessagingResponse
 from agents.router import _has_benefits_context, _is_benefits_request, _normalize_text
 from core.bot_runner import BotRuntime, prepare_runtime, run_bot_query
 from core.privacy import mask_sensitive_text
+from experiments.evaluation import (
+    DEFAULT_EVALUATION_CHANNEL,
+    DEFAULT_EVALUATION_ENTRYPOINT,
+    build_evaluation_langfuse_tags,
+    build_evaluation_langfuse_user_id,
+    build_evaluation_response,
+    build_evaluation_trace_metadata,
+    is_evaluation_endpoint_enabled,
+    is_evaluation_request_authorized,
+    normalize_evaluation_session_id,
+)
 from memory.local_memory import load_memory
 from memory.session_store import get_or_create_conversation_session
 from services.twilio_media import build_media_payload, looks_like_pdf_media
@@ -329,6 +340,77 @@ def root() -> Response:
 @app.get("/health")
 def health() -> Response:
     return jsonify({"status": "ok"})
+
+
+@app.post("/evaluate")
+def evaluate() -> Response:
+    if not is_evaluation_endpoint_enabled():
+        return jsonify({"error": "evaluation_endpoint_disabled"}), 404
+
+    provided_token = (request.headers.get("X-Eval-Token") or "").strip()
+    if not is_evaluation_request_authorized(provided_token):
+        return jsonify({"error": "evaluation_unauthorized"}), 403
+
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "invalid_json"}), 400
+
+    question = str(payload.get("question") or "").strip()
+    if not question:
+        return jsonify({"error": "question_required"}), 400
+
+    metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    channel = str(payload.get("channel") or DEFAULT_EVALUATION_CHANNEL).strip()
+    fallback_seed = (
+        metadata.get("dataset_item_id")
+        or metadata.get("case_id")
+        or metadata.get("dataset_name")
+        or str(int(time.time() * 1000))
+    )
+    session_id = normalize_evaluation_session_id(
+        payload.get("session_id"),
+        fallback_seed=str(fallback_seed),
+    )
+    trace_context: dict[str, object] = {}
+
+    try:
+        result = run_bot_query(
+            runtime=get_runtime(),
+            question=question,
+            session_id=session_id,
+            langfuse_user_id=build_evaluation_langfuse_user_id(metadata),
+            langfuse_tags=build_evaluation_langfuse_tags(channel=channel),
+            observation_name="gala-evaluation-request",
+            trace_context=trace_context,
+            trace_channel=channel,
+            trace_entrypoint=DEFAULT_EVALUATION_ENTRYPOINT,
+            trace_metadata=build_evaluation_trace_metadata(
+                session_id=session_id,
+                channel=channel,
+                metadata=metadata,
+            ),
+        )
+    except Exception as exc:
+        return (
+            jsonify(
+                {
+                    "error": "evaluation_failed",
+                    "message": f"{type(exc).__name__}: {str(exc)}",
+                    "session_id": session_id,
+                    "trace_id": trace_context.get("trace_id"),
+                    "latency_ms": trace_context.get("total_latency_ms"),
+                }
+            ),
+            500,
+        )
+
+    return jsonify(
+        build_evaluation_response(
+            result,
+            session_id=session_id,
+            trace_context=trace_context,
+        )
+    )
 
 
 def handle_whatsapp_message() -> Response:
