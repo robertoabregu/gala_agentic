@@ -69,6 +69,15 @@ Si `LLM_JUDGE_ENABLED=false`, solo corren los evaluadores programaticos y no hay
 - `POST /evaluate` ejecuta el mismo grafo del bot sin pasar por Twilio, no devuelve TwiML y usa sesiones `eval-*`.
 - `python experiments/run_langfuse_dataset.py --dataset "Gala Regression Cases" --experiment "local-regression-baseline-v1" --backend-url "http://localhost:5000"` corre un dataset completo contra el backend y registra el dataset run en Langfuse.
 - La guia completa para proteger el endpoint, estructurar datasets y leer scores estÃ¡ en `docs/experiments.md`.
+Variables opcionales para WhatsApp:
+
+```bash
+WHATSAPP_ASYNC_MAX_WORKERS=4
+WHATSAPP_INBOUND_DEDUPE_TTL_SECONDS=1800
+WHATSAPP_SESSION_TTL_SECONDS=900
+```
+
+`WHATSAPP_SESSION_TTL_SECONDS` controla la duracion de la sesion conversacional de WhatsApp por inactividad. El `user_id` se mantiene estable por numero normalizado, por ejemplo `whatsapp-5491125456750`, mientras que el `session_id` conversacional rota por charla, por ejemplo `whatsapp-5491125456750-20260525-190502-a8f3`. Ese `session_id` es el que usa la memoria local del bot y el `langfuse_session_id`, mientras que Langfuse sigue recibiendo el numero normalizado como `langfuse_user_id`.
 
 ## Uso local
 
@@ -116,6 +125,7 @@ No se versionan archivos locales o sensibles:
 
 - `.env`
 - `data/memory/`
+- `data/session_store/`
 - `data/vectorstore/`
 - `__pycache__/`
 - `.vscode/`
